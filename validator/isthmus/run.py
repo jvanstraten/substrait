@@ -1,4 +1,8 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 import os
+import shutil
 import subprocess
 import json
 import substrait_validator
@@ -23,12 +27,18 @@ if __name__ == '__main__':
 
     # Figure out environment.
     script_path = os.path.dirname(os.path.realpath(__file__))
+    output_path = os.path.join(script_path, 'output')
     repo_path = os.path.realpath(os.path.join(script_path, '..', '..'))
     java_path = os.path.join(repo_path, 'java')
     tpch_path = os.path.join(java_path, 'isthmus', 'src', 'test', 'resources', 'tpch')
     schema_path = os.path.join(tpch_path, 'schema.sql')
     query_path = os.path.join(tpch_path, 'queries')
     isthmus_path = os.path.join(java_path, 'isthmus', 'build', 'graal', 'isthmus')
+
+    # Clear output directory.
+    if os.path.isdir(output_path):
+        shutil.rmdir(output_path)
+    os.makedirs(output_path)
 
     # Build isthmus if it hasn't already been built.
     if not os.path.isfile(isthmus_path):
@@ -86,7 +96,7 @@ if __name__ == '__main__':
             html = '\n'.join(html)
 
             # Write file.
-            html_fname = os.path.join(script_path, f'isthmus-{name}.html')
+            html_fname = os.path.join(output_path, f'{name}.html')
             with open(html_fname, 'w') as f:
                 f.write(html)
 
