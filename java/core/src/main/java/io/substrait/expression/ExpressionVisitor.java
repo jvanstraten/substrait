@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package io.substrait.expression;
 
 public interface ExpressionVisitor<R, E extends Throwable> {

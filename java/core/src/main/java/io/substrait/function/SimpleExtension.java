@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package io.substrait.function;
 
 import com.fasterxml.jackson.annotation.JsonProperty;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package io.substrait.type;
 
 public interface TypeVisitor<R, E extends Throwable> {

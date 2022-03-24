@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package io.substrait.type.proto;
 
 import io.substrait.function.TypeExpression;

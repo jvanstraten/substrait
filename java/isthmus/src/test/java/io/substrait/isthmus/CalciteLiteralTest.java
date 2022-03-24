@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package io.substrait.isthmus;
 
 import static io.substrait.expression.ExpressionCreator.*;

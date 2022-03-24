@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import com.google.protobuf.gradle.protobuf
 import com.google.protobuf.gradle.protoc
 import org.gradle.plugins.ide.idea.model.IdeaModel

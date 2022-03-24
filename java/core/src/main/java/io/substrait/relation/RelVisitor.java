@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package io.substrait.relation;
 
 public interface RelVisitor<OUTPUT, EXCEPTION extends Exception> {

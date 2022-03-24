@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import com.github.vlsi.gradle.dsl.configureEach
 
 plugins {
