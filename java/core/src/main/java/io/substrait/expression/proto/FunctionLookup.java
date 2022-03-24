@@ -18,7 +18,7 @@ public class FunctionLookup {
   private final BidiMap<Integer, SimpleExtension.FunctionAnchor> map = new BidiMap<>();
   private final BidiMap<Integer, String> uriMap = new BidiMap<>();
 
-  private int counter = -1;
+  private int counter = 0;
 
   public int getFunctionReference(SimpleExtension.Function declaration) {
     Integer i = map.reverseGet(declaration.getAnchor());
