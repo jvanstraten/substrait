@@ -1,16 +1,17 @@
 package io.substrait.function;
 
 import io.substrait.type.TypeVisitor;
+import java.util.Locale;
 import org.immutables.value.Value;
 
-import java.util.Locale;
-
 /**
- * Types used in function argument declarations. Can utilize strings for integer or type parameters.
+ * Types used in function argument declarations. Can utilize strings for integer
+ * or type parameters.
  */
 @Value.Enclosing
 public interface ParameterizedType extends TypeExpression {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ParameterizedType.class);
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(ParameterizedType.class);
 
   static class RequiredParameterizedVisitorException extends RuntimeException {
     @Override
@@ -19,33 +20,36 @@ public interface ParameterizedType extends TypeExpression {
     }
   }
 
-  <R, E extends Throwable> R accept(final TypeVisitor<R, E> typeVisitor) throws E;
-
+  <R, E extends Throwable> R accept(final TypeVisitor<R, E> typeVisitor)
+      throws E;
 
   public static ParameterizedTypeCreator withNullability(boolean nullable) {
-    return nullable ? ParameterizedTypeCreator.NULLABLE : ParameterizedTypeCreator.REQUIRED;
+    return nullable ? ParameterizedTypeCreator.NULLABLE
+                    : ParameterizedTypeCreator.REQUIRED;
   }
 
   interface NullableParameterizedType extends ParameterizedType {
     boolean nullable();
   }
 
-  default boolean isWildcard() {
-    return false;
-  }
+  default boolean isWildcard() { return false; }
 
   static abstract class BaseParameterizedType implements ParameterizedType {
-    public final <R, E extends Throwable> R accept(final TypeVisitor<R, E> typeVisitor) throws E {
+    public final <R, E extends Throwable>
+        R accept(final TypeVisitor<R, E> typeVisitor) throws E {
       if (typeVisitor instanceof ParameterizedTypeVisitor) {
-        return accept((ParameterizedTypeVisitor<R, E>) typeVisitor);
+        return accept((ParameterizedTypeVisitor<R, E>)typeVisitor);
       }
       throw new RequiredParameterizedVisitorException();
     }
-    abstract <R, E extends Throwable> R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor) throws E;
+    abstract <R, E extends Throwable>
+        R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor)
+            throws E;
   }
 
   @Value.Immutable
-  static abstract class FixedChar extends BaseParameterizedType implements NullableType {
+  static abstract class FixedChar
+      extends BaseParameterizedType implements NullableType {
     public abstract StringLiteral length();
 
     public static ImmutableParameterizedType.FixedChar.Builder builder() {
@@ -53,13 +57,16 @@ public interface ParameterizedType extends TypeExpression {
     }
 
     @Override
-    <R, E extends Throwable> R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor) throws E {
+    <R, E extends Throwable>
+        R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor)
+            throws E {
       return parameterizedTypeVisitor.visit(this);
     }
   }
 
   @Value.Immutable
-  static abstract class VarChar extends BaseParameterizedType implements NullableType {
+  static abstract class VarChar
+      extends BaseParameterizedType implements NullableType {
     public abstract StringLiteral length();
 
     public static ImmutableParameterizedType.VarChar.Builder builder() {
@@ -67,13 +74,16 @@ public interface ParameterizedType extends TypeExpression {
     }
 
     @Override
-    <R, E extends Throwable> R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor) throws E {
+    <R, E extends Throwable>
+        R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor)
+            throws E {
       return parameterizedTypeVisitor.visit(this);
     }
   }
 
   @Value.Immutable
-  static abstract class FixedBinary extends BaseParameterizedType implements NullableType {
+  static abstract class FixedBinary
+      extends BaseParameterizedType implements NullableType {
     public abstract StringLiteral length();
 
     public static ImmutableParameterizedType.FixedBinary.Builder builder() {
@@ -81,19 +91,24 @@ public interface ParameterizedType extends TypeExpression {
     }
 
     @Override
-    <R, E extends Throwable> R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor) throws E {
+    <R, E extends Throwable>
+        R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor)
+            throws E {
       return parameterizedTypeVisitor.visit(this);
     }
   }
 
   @Value.Immutable
-  static abstract class Decimal extends BaseParameterizedType implements NullableType {
+  static abstract class Decimal
+      extends BaseParameterizedType implements NullableType {
     public abstract StringLiteral scale();
 
     public abstract StringLiteral precision();
 
     @Override
-    <R, E extends Throwable> R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor) throws E {
+    <R, E extends Throwable>
+        R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor)
+            throws E {
       return parameterizedTypeVisitor.visit(this);
     }
     public static ImmutableParameterizedType.Decimal.Builder builder() {
@@ -102,7 +117,8 @@ public interface ParameterizedType extends TypeExpression {
   }
 
   @Value.Immutable
-  static abstract class Struct extends BaseParameterizedType implements NullableType {
+  static abstract class Struct
+      extends BaseParameterizedType implements NullableType {
     public abstract java.util.List<ParameterizedType> fields();
 
     public static ImmutableParameterizedType.Struct.Builder builder() {
@@ -110,13 +126,16 @@ public interface ParameterizedType extends TypeExpression {
     }
 
     @Override
-    <R, E extends Throwable> R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor) throws E {
+    <R, E extends Throwable>
+        R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor)
+            throws E {
       return parameterizedTypeVisitor.visit(this);
     }
   }
 
   @Value.Immutable
-  static abstract class ListType extends BaseParameterizedType implements NullableType {
+  static abstract class ListType
+      extends BaseParameterizedType implements NullableType {
     public abstract ParameterizedType name();
 
     public static ImmutableParameterizedType.ListType.Builder builder() {
@@ -124,13 +143,16 @@ public interface ParameterizedType extends TypeExpression {
     }
 
     @Override
-    <R, E extends Throwable> R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor) throws E {
+    <R, E extends Throwable>
+        R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor)
+            throws E {
       return parameterizedTypeVisitor.visit(this);
     }
   }
 
   @Value.Immutable
-  static abstract class Map extends BaseParameterizedType implements NullableType {
+  static abstract class Map
+      extends BaseParameterizedType implements NullableType {
     public abstract ParameterizedType key();
 
     public abstract ParameterizedType value();
@@ -140,7 +162,9 @@ public interface ParameterizedType extends TypeExpression {
     }
 
     @Override
-    <R, E extends Throwable> R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor) throws E {
+    <R, E extends Throwable>
+        R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor)
+            throws E {
       return parameterizedTypeVisitor.visit(this);
     }
   }
@@ -159,9 +183,10 @@ public interface ParameterizedType extends TypeExpression {
     }
 
     @Override
-    <R, E extends Throwable> R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor) throws E {
+    <R, E extends Throwable>
+        R accept(final ParameterizedTypeVisitor<R, E> parameterizedTypeVisitor)
+            throws E {
       return parameterizedTypeVisitor.visit(this);
     }
   }
-
 }

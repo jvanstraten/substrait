@@ -1,27 +1,32 @@
 package io.substrait.type.proto;
 
-import io.substrait.proto.DerivationExpression;
 import io.substrait.function.ParameterizedType;
 import io.substrait.function.TypeExpression;
+import io.substrait.proto.DerivationExpression;
 import io.substrait.proto.Type;
 
-public class TypeExpressionProtoVisitor extends BaseProtoConverter<DerivationExpression, DerivationExpression> {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(
-      TypeExpressionProtoVisitor.class);
+public class TypeExpressionProtoVisitor
+    extends BaseProtoConverter<DerivationExpression, DerivationExpression> {
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(TypeExpressionProtoVisitor.class);
 
   public TypeExpressionProtoVisitor() {
     super("Unexpected expression type. This shouldn't happen.");
   }
 
-  @Override public BaseProtoTypes<DerivationExpression, DerivationExpression> typeContainer(
-      final boolean nullable) {
+  @Override
+  public BaseProtoTypes<DerivationExpression, DerivationExpression>
+  typeContainer(final boolean nullable) {
     return nullable ? DERIVATION_NULLABLE : DERIVATION_REQUIRED;
   }
 
-  private static final DerivationTypes DERIVATION_NULLABLE = new DerivationTypes(Type.Nullability.NULLABILITY_NULLABLE);
-  private static final DerivationTypes DERIVATION_REQUIRED = new DerivationTypes(Type.Nullability.NULLABILITY_REQUIRED);
+  private static final DerivationTypes DERIVATION_NULLABLE =
+      new DerivationTypes(Type.Nullability.NULLABILITY_NULLABLE);
+  private static final DerivationTypes DERIVATION_REQUIRED =
+      new DerivationTypes(Type.Nullability.NULLABILITY_REQUIRED);
 
-  @Override public DerivationExpression visit(final TypeExpression.BinaryOperation expr) {
+  @Override
+  public DerivationExpression visit(final TypeExpression.BinaryOperation expr) {
     var opType = switch (expr.opType()) {
       case ADD -> DerivationExpression.BinaryOp.BinaryOpType.BINARY_OP_TYPE_PLUS;
       case SUBTRACT -> DerivationExpression.BinaryOp.BinaryOpType.BINARY_OP_TYPE_MINUS;

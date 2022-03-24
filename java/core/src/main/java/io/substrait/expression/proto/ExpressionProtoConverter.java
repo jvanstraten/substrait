@@ -6,12 +6,13 @@ import io.substrait.expression.FieldReference;
 import io.substrait.proto.AggregateFunction;
 import io.substrait.proto.Expression;
 import io.substrait.type.proto.TypeProtoConverter;
-
 import java.util.List;
 import java.util.function.Consumer;
 
-public class ExpressionProtoConverter implements ExpressionVisitor<Expression, RuntimeException> {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ExpressionProtoConverter.class);
+public class ExpressionProtoConverter
+    implements ExpressionVisitor<Expression, RuntimeException> {
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(ExpressionProtoConverter.class);
 
   private final FunctionLookup lookup;
 
@@ -21,7 +22,8 @@ public class ExpressionProtoConverter implements ExpressionVisitor<Expression, R
 
   @Override
   public Expression visit(io.substrait.expression.Expression.NullLiteral expr) {
-    return lit(bldr -> bldr.setNull(expr.type().accept(TypeProtoConverter.INSTANCE)));
+    return lit(
+        bldr -> bldr.setNull(expr.type().accept(TypeProtoConverter.INSTANCE)));
   }
 
   private Expression lit(Consumer<Expression.Literal.Builder> consumer) {
@@ -71,7 +73,8 @@ public class ExpressionProtoConverter implements ExpressionVisitor<Expression, R
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.BinaryLiteral expr) {
+  public Expression
+  visit(io.substrait.expression.Expression.BinaryLiteral expr) {
     return lit(bldr -> bldr.setBinary(expr.value()));
   }
 
@@ -86,25 +89,35 @@ public class ExpressionProtoConverter implements ExpressionVisitor<Expression, R
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.TimestampLiteral expr) {
+  public Expression
+  visit(io.substrait.expression.Expression.TimestampLiteral expr) {
     return lit(bldr -> bldr.setTimestamp(expr.value()));
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.TimestampTZLiteral expr) {
+  public Expression
+  visit(io.substrait.expression.Expression.TimestampTZLiteral expr) {
     return lit(bldr -> bldr.setTimestampTz(expr.value()));
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.IntervalYearLiteral expr) {
-    return lit(bldr -> bldr.setIntervalYearToMonth(
-        Expression.Literal.IntervalYearToMonth.newBuilder().setYears(expr.years()).setMonths(expr.months())));
+  public Expression
+  visit(io.substrait.expression.Expression.IntervalYearLiteral expr) {
+    return lit(bldr
+               -> bldr.setIntervalYearToMonth(
+                   Expression.Literal.IntervalYearToMonth.newBuilder()
+                       .setYears(expr.years())
+                       .setMonths(expr.months())));
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.IntervalDayLiteral expr) {
-    return lit(bldr -> bldr.setIntervalDayToSecond(
-        Expression.Literal.IntervalDayToSecond.newBuilder().setDays(expr.days()).setSeconds(expr.seconds())));
+  public Expression
+  visit(io.substrait.expression.Expression.IntervalDayLiteral expr) {
+    return lit(bldr
+               -> bldr.setIntervalDayToSecond(
+                   Expression.Literal.IntervalDayToSecond.newBuilder()
+                       .setDays(expr.days())
+                       .setSeconds(expr.seconds())));
   }
 
   @Override
@@ -113,38 +126,53 @@ public class ExpressionProtoConverter implements ExpressionVisitor<Expression, R
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.FixedCharLiteral expr) {
+  public Expression
+  visit(io.substrait.expression.Expression.FixedCharLiteral expr) {
     return lit(bldr -> bldr.setFixedChar(expr.value()));
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.VarCharLiteral expr) {
-    return lit(bldr -> bldr.setVarChar(Expression.Literal.VarChar.newBuilder().setValue(expr.value()).setLength(expr.length())));
+  public Expression
+  visit(io.substrait.expression.Expression.VarCharLiteral expr) {
+    return lit(bldr
+               -> bldr.setVarChar(Expression.Literal.VarChar.newBuilder()
+                                      .setValue(expr.value())
+                                      .setLength(expr.length())));
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.FixedBinaryLiteral expr) {
+  public Expression
+  visit(io.substrait.expression.Expression.FixedBinaryLiteral expr) {
     return lit(bldr -> bldr.setFixedBinary(expr.value()));
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.DecimalLiteral expr) {
-    return lit(bldr -> bldr.setDecimal(
-        Expression.Literal.Decimal.newBuilder()
-            .setValue(expr.value())
-            .setPrecision(expr.precision())
-            .setScale(expr.scale())));
+  public Expression
+  visit(io.substrait.expression.Expression.DecimalLiteral expr) {
+    return lit(bldr
+               -> bldr.setDecimal(Expression.Literal.Decimal.newBuilder()
+                                      .setValue(expr.value())
+                                      .setPrecision(expr.precision())
+                                      .setScale(expr.scale())));
   }
 
   @Override
   public Expression visit(io.substrait.expression.Expression.MapLiteral expr) {
     return lit(bldr -> {
-      var keyValues = expr.values().entrySet().stream().map(e -> {
-        var key = toLiteral(e.getKey());
-        var value = toLiteral(e.getValue());
-        return Expression.Literal.Map.KeyValue.newBuilder().setKey(key).setValue(value).build();
-      }).toList();
-      bldr.setMap(Expression.Literal.Map.newBuilder().addAllKeyValues(keyValues));
+      var keyValues = expr.values()
+                          .entrySet()
+                          .stream()
+                          .map(e -> {
+                            var key = toLiteral(e.getKey());
+                            var value = toLiteral(e.getValue());
+                            return Expression.Literal.Map.KeyValue.newBuilder()
+                                .setKey(key)
+                                .setValue(value)
+                                .build();
+                          })
+                          .toList();
+      bldr.setMap(
+          Expression.Literal.Map.newBuilder().addAllKeyValues(keyValues));
     });
   }
 
@@ -157,14 +185,17 @@ public class ExpressionProtoConverter implements ExpressionVisitor<Expression, R
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.StructLiteral expr) {
+  public Expression
+  visit(io.substrait.expression.Expression.StructLiteral expr) {
     return lit(bldr -> {
       var values = expr.fields().stream().map(this::toLiteral).toList();
-      bldr.setStruct(Expression.Literal.Struct.newBuilder().addAllFields(values));
+      bldr.setStruct(
+          Expression.Literal.Struct.newBuilder().addAllFields(values));
     });
   }
 
-  private Expression.Literal toLiteral(io.substrait.expression.Expression expression) {
+  private Expression.Literal
+  toLiteral(io.substrait.expression.Expression expression) {
     var e = expression.accept(this);
     assert e.getRexTypeCase() == Expression.RexTypeCase.LITERAL;
     return e.getLiteral();
@@ -172,40 +203,61 @@ public class ExpressionProtoConverter implements ExpressionVisitor<Expression, R
 
   @Override
   public Expression visit(io.substrait.expression.Expression.Switch expr) {
-    var clauses = expr.switchClauses().stream().map(
-        s -> Expression.SwitchExpression.IfValue.newBuilder().setIf(toLiteral(s.condition())).setThen(s.then().accept(this)).build()).toList();
-    return Expression.newBuilder().setSwitchExpression(Expression.SwitchExpression.newBuilder().addAllIfs(clauses)
-            .setElse(expr.defaultClause().accept(this))
-        ).build();
+    var clauses = expr.switchClauses()
+                      .stream()
+                      .map(s
+                           -> Expression.SwitchExpression.IfValue.newBuilder()
+                                  .setIf(toLiteral(s.condition()))
+                                  .setThen(s.then().accept(this))
+                                  .build())
+                      .toList();
+    return Expression.newBuilder()
+        .setSwitchExpression(
+            Expression.SwitchExpression.newBuilder().addAllIfs(clauses).setElse(
+                expr.defaultClause().accept(this)))
+        .build();
   }
 
   @Override
   public Expression visit(io.substrait.expression.Expression.IfThen expr) {
-    var clauses = expr.ifClauses().stream().map(
-        s -> Expression.IfThen.IfClause.newBuilder()
-            .setIf(s.condition().accept(this))
-            .setThen(s.then().accept(this)).build())
-        .toList();
-    return Expression.newBuilder().setIfThen(Expression.IfThen.newBuilder().addAllIfs(clauses)
-        .setElse(expr.elseClause().accept(this))
-    ).build();
+    var clauses = expr.ifClauses()
+                      .stream()
+                      .map(s
+                           -> Expression.IfThen.IfClause.newBuilder()
+                                  .setIf(s.condition().accept(this))
+                                  .setThen(s.then().accept(this))
+                                  .build())
+                      .toList();
+    return Expression.newBuilder()
+        .setIfThen(Expression.IfThen.newBuilder().addAllIfs(clauses).setElse(
+            expr.elseClause().accept(this)))
+        .build();
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.ScalarFunctionInvocation expr) {
-    return Expression.newBuilder().setScalarFunction(Expression.ScalarFunction.newBuilder()
-        .setOutputType(expr.getType().accept(TypeProtoConverter.INSTANCE))
-        .setFunctionReference(lookup.getFunctionReference(expr.declaration()))
-        .addAllArgs(expr.arguments().stream().map(a -> a.accept(this)).toList())
-    ).build();
+  public Expression
+  visit(io.substrait.expression.Expression.ScalarFunctionInvocation expr) {
+    return Expression.newBuilder()
+        .setScalarFunction(
+            Expression.ScalarFunction.newBuilder()
+                .setOutputType(
+                    expr.getType().accept(TypeProtoConverter.INSTANCE))
+                .setFunctionReference(
+                    lookup.getFunctionReference(expr.declaration()))
+                .addAllArgs(expr.arguments()
+                                .stream()
+                                .map(a -> a.accept(this))
+                                .toList()))
+        .build();
   }
 
   @Override
   public Expression visit(io.substrait.expression.Expression.Cast expr) {
     return Expression.newBuilder()
-        .setCast(Expression.Cast.newBuilder()
-            .setInput(expr.input().accept(this))
-            .setType(expr.getType().accept(TypeProtoConverter.INSTANCE)))
+        .setCast(
+            Expression.Cast.newBuilder()
+                .setInput(expr.input().accept(this))
+                .setType(expr.getType().accept(TypeProtoConverter.INSTANCE)))
         .build();
   }
 
@@ -218,25 +270,30 @@ public class ExpressionProtoConverter implements ExpressionVisitor<Expression, R
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.SingleOrList expr) throws RuntimeException {
+  public Expression visit(io.substrait.expression.Expression.SingleOrList expr)
+      throws RuntimeException {
     return Expression.newBuilder()
-        .setSingularOrList(
-            Expression.SingularOrList.newBuilder()
-                .setValue(expr.condition().accept(this))
-                .addAllOptions(from(expr.options())))
+        .setSingularOrList(Expression.SingularOrList.newBuilder()
+                               .setValue(expr.condition().accept(this))
+                               .addAllOptions(from(expr.options())))
         .build();
   }
 
   @Override
-  public Expression visit(io.substrait.expression.Expression.MultiOrList expr) throws RuntimeException {
+  public Expression visit(io.substrait.expression.Expression.MultiOrList expr)
+      throws RuntimeException {
     return Expression.newBuilder()
         .setMultiOrList(
             Expression.MultiOrList.newBuilder()
                 .addAllValue(from(expr.conditions()))
-                .addAllOptions(expr.optionCombinations()
-                    .stream()
-                    .map(r -> Expression.MultiOrList.Record.newBuilder().addAllFields(from(r.values())).build()).toList())
-        )
+                .addAllOptions(
+                    expr.optionCombinations()
+                        .stream()
+                        .map(r
+                             -> Expression.MultiOrList.Record.newBuilder()
+                                    .addAllFields(from(r.values()))
+                                    .build())
+                        .toList()))
         .build();
   }
 

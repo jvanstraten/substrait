@@ -4,10 +4,9 @@ import io.substrait.expression.Expression;
 import io.substrait.proto.JoinRel;
 import io.substrait.type.Type;
 import io.substrait.type.TypeCreator;
-import org.immutables.value.Value;
-
 import java.util.Optional;
 import java.util.stream.Stream;
+import org.immutables.value.Value;
 
 @Value.Immutable
 public abstract class Join extends BiRel {
@@ -29,21 +28,16 @@ public abstract class Join extends BiRel {
 
     private JoinRel.JoinType proto;
 
-    JoinType(JoinRel.JoinType proto) {
-      this.proto = proto;
-    }
+    JoinType(JoinRel.JoinType proto) { this.proto = proto; }
 
-    public JoinRel.JoinType toProto() {
-      return proto;
-    }
+    public JoinRel.JoinType toProto() { return proto; }
   }
 
   @Override
   protected Type.Struct deriveRecordType() {
-    return TypeCreator.REQUIRED.struct(Stream.concat(
-        getLeft().getRecordType().fields().stream(),
-        getRight().getRecordType().fields().stream()
-    ));
+    return TypeCreator.REQUIRED.struct(
+        Stream.concat(getLeft().getRecordType().fields().stream(),
+                      getRight().getRecordType().fields().stream()));
   }
 
   @Override

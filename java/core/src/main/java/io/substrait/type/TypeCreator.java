@@ -59,7 +59,11 @@ public class TypeCreator {
   }
 
   public final Type decimal(int precision, int scale) {
-    return Type.Decimal.builder().nullable(nullable).precision(precision).scale(scale).build();
+    return Type.Decimal.builder()
+        .nullable(nullable)
+        .precision(precision)
+        .scale(scale)
+        .build();
   }
 
   public final Type.Struct struct(Type... types) {
@@ -71,7 +75,10 @@ public class TypeCreator {
   }
 
   public Type.Struct struct(Stream<? extends Type> types) {
-    return Type.Struct.builder().nullable(nullable).addAllFields(types.collect(Collectors.toList())).build();
+    return Type.Struct.builder()
+        .nullable(nullable)
+        .addAllFields(types.collect(Collectors.toList()))
+        .build();
   }
 
   public Type list(Type type) {

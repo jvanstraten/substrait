@@ -2,7 +2,6 @@ package io.substrait.relation;
 
 import io.substrait.type.Type;
 import io.substrait.util.Util;
-
 import java.util.function.Supplier;
 
 public abstract class AbstractRel implements Rel {
@@ -18,5 +17,4 @@ public abstract class AbstractRel implements Rel {
   public final Type.Struct getRecordType() {
     return recordType.get();
   }
-
 }

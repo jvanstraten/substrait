@@ -2,12 +2,12 @@ package io.substrait.type;
 
 import java.util.stream.Collectors;
 
-public class StringTypeVisitor implements TypeVisitor<String, RuntimeException> {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StringTypeVisitor.class);
+public class StringTypeVisitor
+    implements TypeVisitor<String, RuntimeException> {
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(StringTypeVisitor.class);
 
-  private String n(Type type) {
-    return type.nullable() ? "?" : "";
-  }
+  private String n(Type type) { return type.nullable() ? "?" : ""; }
 
   @Override
   public String visit(Type.Bool type) throws RuntimeException {
@@ -106,21 +106,29 @@ public class StringTypeVisitor implements TypeVisitor<String, RuntimeException> 
 
   @Override
   public String visit(Type.Decimal type) throws RuntimeException {
-    return String.format("decimal<%d,%d>%s", type.precision(), type.scale(), n(type));
+    return String.format("decimal<%d,%d>%s", type.precision(), type.scale(),
+                         n(type));
   }
 
   @Override
   public String visit(Type.Struct type) throws RuntimeException {
-    return String.format("struct<%s>%s", type.fields().stream().map(t -> t.accept(this)).collect(Collectors.joining(", ")), n(type));
+    return String.format("struct<%s>%s",
+                         type.fields()
+                             .stream()
+                             .map(t -> t.accept(this))
+                             .collect(Collectors.joining(", ")),
+                         n(type));
   }
 
   @Override
   public String visit(Type.ListType type) throws RuntimeException {
-    return String.format("list<%s>%s", type.elementType().accept(this), n(type));
+    return String.format("list<%s>%s", type.elementType().accept(this),
+                         n(type));
   }
 
   @Override
   public String visit(Type.Map type) throws RuntimeException {
-    return String.format("map<%s,%s>%s", type.key().accept(this), type.value().accept(this), n(type));
+    return String.format("map<%s,%s>%s", type.key().accept(this),
+                         type.value().accept(this), n(type));
   }
 }

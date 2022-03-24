@@ -61,50 +61,48 @@ public abstract class RelNodeVisitor<OUTPUT, EXCEPTION extends Throwable> {
 
   public abstract OUTPUT visitOther(RelNode other) throws EXCEPTION;
 
-  protected RelNodeVisitor(){}
+  protected RelNodeVisitor() {}
 
   /**
-   * The method you call when you would normally call RelNode.accept(visitor). Instead call
-   * RelVisitor.reverseAccept(RelNode) due to the lack of ability to extend base classes.
+   * The method you call when you would normally call RelNode.accept(visitor).
+   * Instead call RelVisitor.reverseAccept(RelNode) due to the lack of ability
+   * to extend base classes.
    */
   public final OUTPUT reverseAccept(RelNode node) throws EXCEPTION {
-    if(node instanceof TableScan scan) {
+    if (node instanceof TableScan scan) {
       return this.visit(scan);
-    } else if(node instanceof TableFunctionScan scan) {
+    } else if (node instanceof TableFunctionScan scan) {
       return this.visit(scan);
-    } else if(node instanceof LogicalValues values) {
+    } else if (node instanceof LogicalValues values) {
       return this.visit(values);
-    } else if(node instanceof LogicalFilter filter) {
+    } else if (node instanceof LogicalFilter filter) {
       return this.visit(filter);
-    } else if(node instanceof LogicalCalc calc) {
+    } else if (node instanceof LogicalCalc calc) {
       return this.visit(calc);
-    } else if(node instanceof LogicalProject project) {
+    } else if (node instanceof LogicalProject project) {
       return this.visit(project);
-    } else if(node instanceof LogicalJoin join) {
+    } else if (node instanceof LogicalJoin join) {
       return this.visit(join);
-    } else if(node instanceof LogicalCorrelate correlate) {
+    } else if (node instanceof LogicalCorrelate correlate) {
       return this.visit(correlate);
-    } else if(node instanceof LogicalUnion union) {
+    } else if (node instanceof LogicalUnion union) {
       return this.visit(union);
-    } else if(node instanceof LogicalIntersect intersect) {
+    } else if (node instanceof LogicalIntersect intersect) {
       return this.visit(intersect);
-    } else if(node instanceof LogicalMinus minus) {
+    } else if (node instanceof LogicalMinus minus) {
       return this.visit(minus);
-    } else if(node instanceof LogicalMatch match) {
+    } else if (node instanceof LogicalMatch match) {
       return this.visit(match);
-    } else if(node instanceof LogicalSort sort) {
+    } else if (node instanceof LogicalSort sort) {
       return this.visit(sort);
-    } else if(node instanceof LogicalExchange exchange) {
+    } else if (node instanceof LogicalExchange exchange) {
       return this.visit(exchange);
-    } else if(node instanceof LogicalAggregate aggregate) {
+    } else if (node instanceof LogicalAggregate aggregate) {
       return this.visit(aggregate);
-    } else if(node instanceof LogicalTableModify modify) {
+    } else if (node instanceof LogicalTableModify modify) {
       return this.visit(modify);
     } else {
       return this.visitOther(node);
     }
-
   }
-
 }
-

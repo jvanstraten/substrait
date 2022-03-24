@@ -4,7 +4,8 @@ import io.substrait.function.ParameterizedType;
 import io.substrait.function.ParameterizedTypeVisitor;
 import io.substrait.type.Type;
 
-public class IgnoreNullableAndParameters implements ParameterizedTypeVisitor<Boolean, RuntimeException> {
+public class IgnoreNullableAndParameters
+    implements ParameterizedTypeVisitor<Boolean, RuntimeException> {
 
   private final ParameterizedType typeToMatch;
 
@@ -94,76 +95,94 @@ public class IgnoreNullableAndParameters implements ParameterizedTypeVisitor<Boo
 
   @Override
   public Boolean visit(Type.FixedChar type) {
-    return typeToMatch instanceof Type.FixedChar || typeToMatch instanceof ParameterizedType.FixedChar;
+    return typeToMatch instanceof Type.FixedChar ||
+        typeToMatch instanceof ParameterizedType.FixedChar;
   }
 
   @Override
   public Boolean visit(Type.VarChar type) {
-    return typeToMatch instanceof Type.VarChar || typeToMatch instanceof ParameterizedType.VarChar;
+    return typeToMatch instanceof Type.VarChar || typeToMatch instanceof
+                                                      ParameterizedType.VarChar;
   }
 
   @Override
   public Boolean visit(Type.FixedBinary type) {
-    return typeToMatch instanceof Type.FixedBinary || typeToMatch instanceof ParameterizedType.FixedBinary;
+    return typeToMatch instanceof Type.FixedBinary ||
+        typeToMatch instanceof ParameterizedType.FixedBinary;
   }
 
   @Override
   public Boolean visit(Type.Decimal type) {
-    return typeToMatch instanceof Type.Decimal || typeToMatch instanceof ParameterizedType.Decimal;
+    return typeToMatch instanceof Type.Decimal || typeToMatch instanceof
+                                                      ParameterizedType.Decimal;
   }
 
   @Override
   public Boolean visit(Type.Struct type) {
-    return typeToMatch instanceof Type.Struct || typeToMatch instanceof ParameterizedType.Struct;
+    return typeToMatch instanceof Type.Struct || typeToMatch instanceof
+                                                     ParameterizedType.Struct;
   }
 
   @Override
   public Boolean visit(Type.ListType type) {
-    return typeToMatch instanceof Type.ListType || typeToMatch instanceof ParameterizedType.ListType;
+    return typeToMatch instanceof Type.ListType ||
+        typeToMatch instanceof ParameterizedType.ListType;
   }
 
   @Override
   public Boolean visit(Type.Map type) {
-    return typeToMatch instanceof Type.Map || typeToMatch instanceof ParameterizedType.Map;
+    return typeToMatch instanceof Type.Map || typeToMatch instanceof
+                                                  ParameterizedType.Map;
   }
 
   @Override
-  public Boolean visit(ParameterizedType.FixedChar expr) throws RuntimeException {
-    return typeToMatch instanceof Type.FixedChar || typeToMatch instanceof ParameterizedType.FixedChar;
+  public Boolean visit(ParameterizedType.FixedChar expr)
+      throws RuntimeException {
+    return typeToMatch instanceof Type.FixedChar ||
+        typeToMatch instanceof ParameterizedType.FixedChar;
   }
 
   @Override
   public Boolean visit(ParameterizedType.VarChar expr) throws RuntimeException {
-    return typeToMatch instanceof Type.VarChar || typeToMatch instanceof ParameterizedType.VarChar;
+    return typeToMatch instanceof Type.VarChar || typeToMatch instanceof
+                                                      ParameterizedType.VarChar;
   }
 
   @Override
-  public Boolean visit(ParameterizedType.FixedBinary expr) throws RuntimeException {
-    return typeToMatch instanceof Type.FixedBinary || typeToMatch instanceof ParameterizedType.FixedBinary;
+  public Boolean visit(ParameterizedType.FixedBinary expr)
+      throws RuntimeException {
+    return typeToMatch instanceof Type.FixedBinary ||
+        typeToMatch instanceof ParameterizedType.FixedBinary;
   }
 
   @Override
   public Boolean visit(ParameterizedType.Decimal expr) throws RuntimeException {
-    return typeToMatch instanceof Type.Decimal || typeToMatch instanceof ParameterizedType.Decimal;
+    return typeToMatch instanceof Type.Decimal || typeToMatch instanceof
+                                                      ParameterizedType.Decimal;
   }
 
   @Override
   public Boolean visit(ParameterizedType.Struct expr) throws RuntimeException {
-    return typeToMatch instanceof Type.Struct || typeToMatch instanceof ParameterizedType.Struct;
+    return typeToMatch instanceof Type.Struct || typeToMatch instanceof
+                                                     ParameterizedType.Struct;
   }
 
   @Override
-  public Boolean visit(ParameterizedType.ListType expr) throws RuntimeException {
-    return typeToMatch instanceof Type.ListType || typeToMatch instanceof ParameterizedType.ListType;
+  public Boolean visit(ParameterizedType.ListType expr)
+      throws RuntimeException {
+    return typeToMatch instanceof Type.ListType ||
+        typeToMatch instanceof ParameterizedType.ListType;
   }
 
   @Override
   public Boolean visit(ParameterizedType.Map expr) throws RuntimeException {
-    return typeToMatch instanceof Type.Map || typeToMatch instanceof ParameterizedType.Map;
+    return typeToMatch instanceof Type.Map || typeToMatch instanceof
+                                                  ParameterizedType.Map;
   }
 
   @Override
-  public Boolean visit(ParameterizedType.StringLiteral stringLiteral) throws RuntimeException {
+  public Boolean visit(ParameterizedType.StringLiteral stringLiteral)
+      throws RuntimeException {
     return false;
   }
 }

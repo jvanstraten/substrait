@@ -1,10 +1,14 @@
 package io.substrait.isthmus;
 
 import io.substrait.function.NullableType;
+import io.substrait.function.TypeExpression;
 import io.substrait.type.NamedStruct;
 import io.substrait.type.Type;
 import io.substrait.type.TypeCreator;
 import io.substrait.type.TypeVisitor;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.apache.calcite.avatica.util.TimeUnit;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -13,29 +17,26 @@ import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.type.MapSqlType;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import io.substrait.function.TypeExpression;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
-
 public class TypeConverter {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TypeConverter.class);
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(TypeConverter.class);
 
-  static final SqlIntervalQualifier INTERVAL_YEAR = new SqlIntervalQualifier(TimeUnit.YEAR, TimeUnit.MONTH, SqlParserPos.ZERO);
-  static final SqlIntervalQualifier INTERVAL_DAY = new SqlIntervalQualifier(TimeUnit.DAY, TimeUnit.SECOND, SqlParserPos.ZERO);
+  static final SqlIntervalQualifier INTERVAL_YEAR = new SqlIntervalQualifier(
+      TimeUnit.YEAR, TimeUnit.MONTH, SqlParserPos.ZERO);
+  static final SqlIntervalQualifier INTERVAL_DAY = new SqlIntervalQualifier(
+      TimeUnit.DAY, TimeUnit.SECOND, SqlParserPos.ZERO);
 
   public static Type convert(RelDataType type) {
     return convert(type, new ArrayList<>());
   }
 
   public static NamedStruct toNamedStruct(RelDataType type) {
-    if(type.getSqlTypeName() != SqlTypeName.ROW) {
+    if (type.getSqlTypeName() != SqlTypeName.ROW) {
       throw new IllegalArgumentException("Expected type of struct.");
     }
 
     var names = new ArrayList<String>();
-    var struct = (Type.Struct) convert(type, names);
+    var struct = (Type.Struct)convert(type, names);
     return NamedStruct.of(names, struct);
   }
 
@@ -94,8 +95,8 @@ public class TypeConverter {
       case ROW -> {
         var children = new ArrayList<Type>();
         for (var field : type.getFieldList()) {
-            names.add(field.getName());
-            children.add(convert(field.getType(), names));
+          names.add(field.getName());
+          children.add(convert(field.getType(), names));
         }
         yield creator.struct(children);
       }
@@ -211,34 +212,39 @@ public class TypeConverter {
         List<RelDataType> fieldTypes = new ArrayList<>();
         List<String> localFieldNames = new ArrayList<>();
         for (TypeExpression field : expr.fields()) {
-          localFieldNames.add(fieldNames == null ? "f" + fieldNamePosition : fieldNames.get(fieldNamePosition));
+          localFieldNames.add(fieldNames == null
+                                  ? "f" + fieldNamePosition
+                                  : fieldNames.get(fieldNamePosition));
           fieldNamePosition++;
-          ToRelDataType childVisitor = new ToRelDataType(typeFactory, fieldNames, fieldNamePosition);
+          ToRelDataType childVisitor =
+              new ToRelDataType(typeFactory, fieldNames, fieldNamePosition);
           fieldTypes.add(field.accept(childVisitor));
           fieldNamePosition = childVisitor.fieldNamePosition;
         }
 
-        return n(expr, typeFactory.createStructType(fieldTypes, localFieldNames));
-
-      } finally {
-        withinStruct = false;
+        return n(expr,
+                 typeFactory.createStructType(fieldTypes, localFieldNames));
       }
-    }
+      finally { withinStruct = false; }
+}
 
-    @Override public RelDataType visit(Type.ListType expr) {
-      return n(expr, typeFactory.createArrayType(expr.elementType().accept(this), -1));
-    }
+@Override
+public RelDataType visit(Type.ListType expr) {
+  return n(expr,
+           typeFactory.createArrayType(expr.elementType().accept(this), -1));
+}
 
-    @Override public RelDataType visit(Type.Map expr) {
-      return n(expr, typeFactory.createMapType(expr.key().accept(this), expr.value().accept(this)));
-    }
+@Override
+public RelDataType visit(Type.Map expr) {
+  return n(expr, typeFactory.createMapType(expr.key().accept(this),
+                                           expr.value().accept(this)));
+}
 
-    private boolean n(NullableType type) {
-      return type.nullable();
-    }
+private boolean n(NullableType type) { return type.nullable(); }
 
-    private RelDataType t(boolean nullable, SqlTypeName typeName, Integer... props) {
-      final RelDataType baseType = switch(props.length) {
+private RelDataType t(boolean nullable, SqlTypeName typeName,
+                      Integer... props) {
+  final RelDataType baseType = switch (props.length) {
         case 0 -> typeFactory.createSqlType(typeName);
         case 1 -> typeFactory.createSqlType(typeName, props[0]);
         case 2 -> typeFactory.createSqlType(typeName, props[0], props[1]);

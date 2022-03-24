@@ -3,23 +3,24 @@ package io.substrait.isthmus.expression;
 import io.substrait.expression.Expression;
 import io.substrait.expression.ExpressionCreator;
 import io.substrait.isthmus.CallConverter;
-import org.apache.calcite.rex.RexCall;
-import org.apache.calcite.rex.RexNode;
-import org.apache.calcite.sql.fun.SqlArrayValueConstructor;
-import org.apache.calcite.sql.fun.SqlMapValueConstructor;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.sql.fun.SqlArrayValueConstructor;
+import org.apache.calcite.sql.fun.SqlMapValueConstructor;
 
 public class LiteralConstructorConverter implements CallConverter {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(LiteralConstructorConverter.class);
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(LiteralConstructorConverter.class);
 
   @Override
-  public Optional<Expression> convert(RexCall call, Function<RexNode, Expression> topLevelConverter) {
-    return switch(call.getOperator()) {
+  public Optional<Expression>
+  convert(RexCall call, Function<RexNode, Expression> topLevelConverter) {
+    return switch (call.getOperator()) {
       case SqlArrayValueConstructor array -> Optional.of(
           ExpressionCreator.list(false,
               call.operands.stream().map(t -> ((Expression.Literal) t.accept(new RexExpressionConverter()))).toList()));

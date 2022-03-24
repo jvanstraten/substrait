@@ -7,24 +7,27 @@ import io.substrait.expression.ImmutableExpression;
 import io.substrait.function.SimpleExtension;
 import io.substrait.type.Type;
 import io.substrait.type.proto.FromProto;
-
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 public class ProtoExpressionConverter {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ProtoExpressionConverter.class);
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(ProtoExpressionConverter.class);
 
   private final FunctionLookup lookup;
   private final SimpleExtension.ExtensionCollection extensions;
   private final Type rootType;
 
-  public ProtoExpressionConverter(FunctionLookup lookup, SimpleExtension.ExtensionCollection extensions, Type rootType) {
+  public ProtoExpressionConverter(
+      FunctionLookup lookup, SimpleExtension.ExtensionCollection extensions,
+      Type rootType) {
     this.lookup = lookup;
     this.extensions = extensions;
     this.rootType = rootType;
   }
 
-  public FieldReference from(io.substrait.proto.Expression.FieldReference reference) {
+  public FieldReference
+  from(io.substrait.proto.Expression.FieldReference reference) {
     switch (reference.getReferenceTypeCase()) {
       case DIRECT_REFERENCE -> {
         io.substrait.proto.Expression.ReferenceSegment segment = reference.getDirectReference();

@@ -3,11 +3,10 @@ package io.substrait.type.proto;
 import io.substrait.type.Type;
 import io.substrait.type.TypeCreator;
 
-
 public class FromProto {
 
   public static Type from(io.substrait.proto.Type type) {
-    return switch(type.getKindCase()) {
+    return switch (type.getKindCase()) {
       case BOOL -> n(type.getBool().getNullability()).BOOLEAN;
       case I8 -> n(type.getI8().getNullability()).I8;
       case I16 -> n(type.getI16().getNullability()).I16;
@@ -36,6 +35,7 @@ public class FromProto {
   }
 
   private static TypeCreator n(io.substrait.proto.Type.Nullability n) {
-    return n == io.substrait.proto.Type.Nullability.NULLABILITY_NULLABLE ? TypeCreator.NULLABLE : TypeCreator.REQUIRED;
+    return n == io.substrait.proto.Type.Nullability.NULLABILITY_NULLABLE ? TypeCreator.NULLABLE :
+        TypeCreator.REQUIRED;
+      }
   }
-}

@@ -3,15 +3,15 @@ package io.substrait.expression;
 import io.substrait.relation.Rel;
 import io.substrait.type.Type;
 import io.substrait.type.TypeVisitor;
-import org.immutables.value.Value;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import org.immutables.value.Value;
 
 @Value.Immutable
 public abstract class FieldReference implements Expression {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FieldReference.class);
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(FieldReference.class);
 
   public abstract List<ReferenceSegment> segments();
 
@@ -19,9 +19,10 @@ public abstract class FieldReference implements Expression {
 
   public abstract Optional<Expression> inputExpression();
 
-  public Type getType() {return type();}
+  public Type getType() { return type(); }
 
-  public <R, E extends Throwable> R accept(ExpressionVisitor<R, E> visitor) throws E {
+  public <R, E extends Throwable> R accept(ExpressionVisitor<R, E> visitor)
+      throws E {
     return visitor.visit(this);
   }
 
@@ -34,7 +35,8 @@ public abstract class FieldReference implements Expression {
     return dereference(newType, StructField.of(index));
   }
 
-  private FieldReference dereference(Type newType, ReferenceSegment nextSegment) {
+  private FieldReference dereference(Type newType,
+                                     ReferenceSegment nextSegment) {
     return ImmutableFieldReference.builder()
         .type(newType)
         .addAllSegments(segments())
@@ -53,15 +55,18 @@ public abstract class FieldReference implements Expression {
     return dereference(newType, MapKey.of(mapKey));
   }
 
-  public static FieldReference newMapReference(Literal mapKey, Expression expression) {
+  public static FieldReference newMapReference(Literal mapKey,
+                                               Expression expression) {
     return ImmutableFieldReference.builder()
         .addSegments(MapKey.of(mapKey))
         .inputExpression(expression)
-        .type(MapKeyFinder.getReferencedType(expression.getType(), mapKey.getType()))
+        .type(MapKeyFinder.getReferencedType(expression.getType(),
+                                             mapKey.getType()))
         .build();
   }
 
-  public static FieldReference newListReference(int index, Expression expression) {
+  public static FieldReference newListReference(int index,
+                                                Expression expression) {
     return ImmutableFieldReference.builder()
         .addSegments(ListElement.of(index))
         .inputExpression(expression)
@@ -69,7 +74,8 @@ public abstract class FieldReference implements Expression {
         .build();
   }
 
-  public static FieldReference newStructReference(int index, Expression expression) {
+  public static FieldReference newStructReference(int index,
+                                                  Expression expression) {
     return ImmutableFieldReference.builder()
         .addSegments(StructField.of(index))
         .inputExpression(expression)
@@ -77,7 +83,8 @@ public abstract class FieldReference implements Expression {
         .build();
   }
 
-  public static FieldReference newRootStructReference(int index, Type knownType) {
+  public static FieldReference newRootStructReference(int index,
+                                                      Type knownType) {
     return ImmutableFieldReference.builder()
         .addSegments(StructField.of(index))
         .type(knownType)
@@ -93,7 +100,8 @@ public abstract class FieldReference implements Expression {
     for (Rel r : rels) {
       int relSize = r.getRecordType().fields().size();
       if (index < currentOffset + relSize) {
-        Type referenceType = r.getRecordType().fields().get(index - currentOffset);
+        Type referenceType =
+            r.getRecordType().fields().get(index - currentOffset);
         return ImmutableFieldReference.builder()
             .addSegments(StructField.of(index))
             .type(referenceType)
@@ -103,7 +111,9 @@ public abstract class FieldReference implements Expression {
       currentOffset += relSize;
     }
 
-    throw new IllegalArgumentException(String.format("The current index %d wasn't found within the number of fields %d", index, currentOffset));
+    throw new IllegalArgumentException(String.format(
+        "The current index %d wasn't found within the number of fields %d",
+        index, currentOffset));
   }
 
   public interface ReferenceSegment {
@@ -112,7 +122,8 @@ public abstract class FieldReference implements Expression {
     FieldReference constructOnRoot(Type type);
   }
 
-  @Value.Immutable public static abstract class StructField implements ReferenceSegment {
+  @Value.Immutable
+  public static abstract class StructField implements ReferenceSegment {
     public abstract int offset();
 
     public static StructField of(int index) {
@@ -135,7 +146,8 @@ public abstract class FieldReference implements Expression {
     }
   }
 
-  @Value.Immutable public static abstract class ListElement implements ReferenceSegment {
+  @Value.Immutable
+  public static abstract class ListElement implements ReferenceSegment {
     public abstract int offset();
 
     public static ListElement of(int index) {
@@ -158,7 +170,8 @@ public abstract class FieldReference implements Expression {
     }
   }
 
-  @Value.Immutable public static abstract class MapKey implements ReferenceSegment {
+  @Value.Immutable
+  public static abstract class MapKey implements ReferenceSegment {
     public abstract Expression.Literal key();
 
     public static MapKey of(Expression.Literal key) {
@@ -181,17 +194,20 @@ public abstract class FieldReference implements Expression {
     }
   }
 
-  public static FieldReference ofExpression(Expression expression, List<ReferenceSegment> segments) {
+  public static FieldReference ofExpression(Expression expression,
+                                            List<ReferenceSegment> segments) {
     return of(null, expression, segments);
   }
 
-  private static FieldReference of(Type type, Expression expression, List<ReferenceSegment> segments) {
+  private static FieldReference of(Type type, Expression expression,
+                                   List<ReferenceSegment> segments) {
     FieldReference reference = null;
     Collections.reverse(segments);
-    for (int i =0; i < segments.size(); i++) {
+    for (int i = 0; i < segments.size(); i++) {
       if (i == 0) {
         var last = segments.get(0);
-        reference = type == null ? last.constructOnExpression(expression) : last.constructOnRoot(type);
+        reference = type == null ? last.constructOnExpression(expression)
+                                 : last.constructOnRoot(type);
       } else {
         reference = segments.get(i).apply(reference);
       }
@@ -200,16 +216,19 @@ public abstract class FieldReference implements Expression {
     return reference;
   }
 
-  public static FieldReference ofRoot(Type type, List<ReferenceSegment> segments) {
+  public static FieldReference ofRoot(Type type,
+                                      List<ReferenceSegment> segments) {
     return of(type, null, segments);
   }
 
-  private static class StructFieldFinder extends TypeVisitor.TypeThrowsVisitor<Type, RuntimeException> {
+  private static class StructFieldFinder
+      extends TypeVisitor.TypeThrowsVisitor<Type, RuntimeException> {
 
     private final int index;
 
     private StructFieldFinder(int index) {
-      super("This visitor only supports retrieving struct types. Was applied to a non-struct type.");
+      super(
+          "This visitor only supports retrieving struct types. Was applied to a non-struct type.");
       this.index = index;
     }
 
@@ -224,15 +243,16 @@ public abstract class FieldReference implements Expression {
     public static Type getReferencedType(Type type, int index) {
       return type.accept(new StructFieldFinder(index));
     }
-
   }
 
-  private static class ListIndexFinder extends TypeVisitor.TypeThrowsVisitor<Type, RuntimeException> {
+  private static class ListIndexFinder
+      extends TypeVisitor.TypeThrowsVisitor<Type, RuntimeException> {
 
     private final int index;
 
     private ListIndexFinder(int index) {
-      super("This visitor only supports retrieving array index offsets. Was applied to a non-array type.");
+      super(
+          "This visitor only supports retrieving array index offsets. Was applied to a non-array type.");
       this.index = index;
     }
 
@@ -244,23 +264,27 @@ public abstract class FieldReference implements Expression {
     public static Type getReferencedType(Type type, int index) {
       return type.accept(new ListIndexFinder(index));
     }
-
   }
 
-  private static class MapKeyFinder extends TypeVisitor.TypeThrowsVisitor<Type, RuntimeException> {
+  private static class MapKeyFinder
+      extends TypeVisitor.TypeThrowsVisitor<Type, RuntimeException> {
 
     private final Type keyType;
 
     private MapKeyFinder(Type keyType) {
-      super("This visitor only supports retrieving map values using map keys. Was applied to a non-map type.");
+      super(
+          "This visitor only supports retrieving map values using map keys. Was applied to a non-map type.");
       this.keyType = keyType;
     }
 
     @Override
     public Type visit(Type.Map expr) throws RuntimeException {
-      // TODO: decide whether to support inconsistent map key type literals. Inclined to not.
+      // TODO: decide whether to support inconsistent map key type literals.
+      // Inclined to not.
       if (!(expr.key().equals(keyType))) {
-        throw new IllegalArgumentException(String.format("Key type %s of map does not matched expected type of %s.", expr.key(), keyType));
+        throw new IllegalArgumentException(String.format(
+            "Key type %s of map does not matched expected type of %s.",
+            expr.key(), keyType));
       }
       return expr.value();
     }
@@ -268,7 +292,5 @@ public abstract class FieldReference implements Expression {
     public static Type getReferencedType(Type typeToDereference, Type keyType) {
       return typeToDereference.accept(new MapKeyFinder(keyType));
     }
-
   }
-
 }

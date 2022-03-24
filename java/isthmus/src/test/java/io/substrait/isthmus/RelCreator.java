@@ -1,5 +1,6 @@
 package io.substrait.isthmus;
 
+import java.util.Arrays;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionProperty;
 import org.apache.calcite.jdbc.CalciteSchema;
@@ -25,20 +26,23 @@ import org.apache.calcite.sql2rel.SqlToRelConverter;
 import org.apache.calcite.sql2rel.StandardConvertletTable;
 import org.apache.calcite.tools.RelBuilder;
 
-import java.util.Arrays;
-
 public class RelCreator {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(RelCreator.class);
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(RelCreator.class);
 
   private RelOptCluster cluster;
   private CalciteCatalogReader catalog;
 
   public RelCreator() {
     CalciteSchema schema = CalciteSchema.createRootSchema(false);
-    RelDataTypeFactory factory = new JavaTypeFactoryImpl(SubstraitTypeSystem.TYPE_SYSTEM);
-    CalciteConnectionConfig config = CalciteConnectionConfig.DEFAULT.set(CalciteConnectionProperty.CASE_SENSITIVE, "false");
-    catalog = new CalciteCatalogReader(schema, Arrays.asList(), factory, config);
-    VolcanoPlanner planner = new VolcanoPlanner(RelOptCostImpl.FACTORY, Contexts.EMPTY_CONTEXT);
+    RelDataTypeFactory factory =
+        new JavaTypeFactoryImpl(SubstraitTypeSystem.TYPE_SYSTEM);
+    CalciteConnectionConfig config = CalciteConnectionConfig.DEFAULT.set(
+        CalciteConnectionProperty.CASE_SENSITIVE, "false");
+    catalog =
+        new CalciteCatalogReader(schema, Arrays.asList(), factory, config);
+    VolcanoPlanner planner =
+        new VolcanoPlanner(RelOptCostImpl.FACTORY, Contexts.EMPTY_CONTEXT);
     cluster = RelOptCluster.create(planner, new RexBuilder(factory));
   }
 
@@ -47,14 +51,19 @@ public class RelCreator {
     try {
       SqlParser parser = SqlParser.create(sql, SqlParser.Config.DEFAULT);
       var parsed = parser.parseQuery();
-      cluster.setMetadataQuerySupplier(() -> new RelMetadataQuery(new ProxyingMetadataHandlerProvider(DefaultRelMetadataProvider.INSTANCE)));
-      SqlValidator validator = new Validator(catalog, cluster.getTypeFactory(), SqlValidator.Config.DEFAULT);
+      cluster.setMetadataQuerySupplier(
+          ()
+              -> new RelMetadataQuery(new ProxyingMetadataHandlerProvider(
+                  DefaultRelMetadataProvider.INSTANCE)));
+      SqlValidator validator = new Validator(catalog, cluster.getTypeFactory(),
+                                             SqlValidator.Config.DEFAULT);
 
-      SqlToRelConverter.Config converterConfig = SqlToRelConverter.config()
-          .withTrimUnusedFields(true)
-          .withExpand(false);
-      SqlToRelConverter converter = new SqlToRelConverter(null, validator, catalog, cluster,
-          StandardConvertletTable.INSTANCE, converterConfig);
+      SqlToRelConverter.Config converterConfig =
+          SqlToRelConverter.config().withTrimUnusedFields(true).withExpand(
+              false);
+      SqlToRelConverter converter = new SqlToRelConverter(
+          null, validator, catalog, cluster, StandardConvertletTable.INSTANCE,
+          converterConfig);
       RelRoot root = converter.convertQuery(parsed, true, true);
       return root;
     } catch (SqlParseException e) {
@@ -66,21 +75,15 @@ public class RelCreator {
     return RelBuilder.proto(Contexts.EMPTY_CONTEXT).create(cluster, catalog);
   }
 
-  public RexBuilder rex() {
-    return cluster.getRexBuilder();
-  }
+  public RexBuilder rex() { return cluster.getRexBuilder(); }
 
-  public RelDataTypeFactory type() {
-    return cluster.getTypeFactory();
-  }
+  public RelDataTypeFactory type() { return cluster.getTypeFactory(); }
 
   private static final class Validator extends SqlValidatorImpl {
 
-    public Validator(SqlValidatorCatalogReader catalogReader, RelDataTypeFactory typeFactory, Config config) {
+    public Validator(SqlValidatorCatalogReader catalogReader,
+                     RelDataTypeFactory typeFactory, Config config) {
       super(SqlStdOperatorTable.instance(), catalogReader, typeFactory, config);
     }
-
   }
-
-
 }

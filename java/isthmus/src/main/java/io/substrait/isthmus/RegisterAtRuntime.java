@@ -4,6 +4,8 @@ import com.google.protobuf.GeneratedMessageV3;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.ProtocolMessageEnum;
 import io.substrait.function.SimpleExtension;
+import java.lang.annotation.Annotation;
+import java.util.Arrays;
 import org.apache.calcite.rel.metadata.*;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.runtime.Resources;
@@ -19,9 +21,6 @@ import org.reflections.scanners.FieldAnnotationsScanner;
 import org.reflections.scanners.SubTypesScanner;
 import org.reflections.scanners.TypeAnnotationsScanner;
 
-import java.lang.annotation.Annotation;
-import java.util.Arrays;
-
 public class RegisterAtRuntime implements Feature {
   public void beforeAnalysis(BeforeAnalysisAccess access) {
     try {
@@ -29,7 +28,7 @@ public class RegisterAtRuntime implements Feature {
       // cli picocli
       register(PlanEntryPoint.class);
 
-      //protobuf items
+      // protobuf items
       registerByParent(substrait, GeneratedMessageV3.class);
       registerByParent(substrait, MessageLite.Builder.class);
       registerByParent(substrait, ProtocolMessageEnum.class);
@@ -43,7 +42,9 @@ public class RegisterAtRuntime implements Feature {
       register(SimpleExtension.ValueArgument.class);
 
       // calcite items
-      Reflections calcite = new Reflections("org.apache.calcite", new FieldAnnotationsScanner(), new SubTypesScanner());
+      Reflections calcite =
+          new Reflections("org.apache.calcite", new FieldAnnotationsScanner(),
+                          new SubTypesScanner());
       register(BuiltInMetadata.class);
       register(SqlValidatorException.class);
       register(CalciteContextException.class);
@@ -53,37 +54,30 @@ public class RegisterAtRuntime implements Feature {
       registerByParent(calcite, MetadataHandler.class);
       registerByParent(calcite, Resources.Element.class);
 
-      Arrays.asList(RelMdPercentageOriginalRows.class,
-          RelMdColumnOrigins.class,
-          RelMdExpressionLineage.class,
-          RelMdTableReferences.class,
-          RelMdNodeTypes.class,
-          RelMdRowCount.class,
-          RelMdMaxRowCount.class,
-          RelMdMinRowCount.class,
-          RelMdUniqueKeys.class,
-          RelMdColumnUniqueness.class,
-          RelMdPopulationSize.class,
-          RelMdSize.class,
-          RelMdParallelism.class,
-          RelMdDistribution.class,
-          RelMdLowerBoundCost.class,
-          RelMdMemory.class,
-          RelMdDistinctRowCount.class,
-          RelMdSelectivity.class,
-          RelMdExplainVisibility.class,
-          RelMdPredicates.class,
-          RelMdAllPredicates.class,
-          RelMdCollation.class)
+      Arrays
+          .asList(RelMdPercentageOriginalRows.class, RelMdColumnOrigins.class,
+                  RelMdExpressionLineage.class, RelMdTableReferences.class,
+                  RelMdNodeTypes.class, RelMdRowCount.class,
+                  RelMdMaxRowCount.class, RelMdMinRowCount.class,
+                  RelMdUniqueKeys.class, RelMdColumnUniqueness.class,
+                  RelMdPopulationSize.class, RelMdSize.class,
+                  RelMdParallelism.class, RelMdDistribution.class,
+                  RelMdLowerBoundCost.class, RelMdMemory.class,
+                  RelMdDistinctRowCount.class, RelMdSelectivity.class,
+                  RelMdExplainVisibility.class, RelMdPredicates.class,
+                  RelMdAllPredicates.class, RelMdCollation.class)
           .forEach(RegisterAtRuntime::register);
 
       RuntimeReflection.register(Resources.class);
       RuntimeReflection.register(SqlValidatorException.class);
 
       Arrays.stream(BuiltInMethod.values()).forEach(c -> {
-        if (c.field != null) RuntimeReflection.register(c.field);
-        if (c.constructor != null) RuntimeReflection.register(c.constructor);
-        if (c.method != null) RuntimeReflection.register(c.method);
+        if (c.field != null)
+          RuntimeReflection.register(c.field);
+        if (c.constructor != null)
+          RuntimeReflection.register(c.constructor);
+        if (c.method != null)
+          RuntimeReflection.register(c.method);
       });
     } catch (Exception e) {
       throw new RuntimeException(e);
@@ -100,10 +94,12 @@ public class RegisterAtRuntime implements Feature {
     RuntimeReflection.register(c.getMethods());
   }
 
-  private static void registerByAnnotation(Reflections reflections, Class<? extends Annotation> c) {
+  private static void registerByAnnotation(Reflections reflections,
+                                           Class<? extends Annotation> c) {
     reflections.getTypesAnnotatedWith(c).stream().forEach(inner -> {
       register(inner);
-      reflections.getSubTypesOf(c).stream().forEach(RegisterAtRuntime::register);
+      reflections.getSubTypesOf(c).stream().forEach(
+          RegisterAtRuntime::register);
     });
   }
 
@@ -111,7 +107,6 @@ public class RegisterAtRuntime implements Feature {
     register(c);
     reflections.getSubTypesOf(c).stream().forEach(RegisterAtRuntime::register);
   }
-
 
   ;
 }

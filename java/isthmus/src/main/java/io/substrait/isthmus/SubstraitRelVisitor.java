@@ -7,6 +7,11 @@ import io.substrait.function.SimpleExtension;
 import io.substrait.isthmus.expression.*;
 import io.substrait.relation.*;
 import io.substrait.type.Type;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.calcite.rel.RelFieldCollation;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
@@ -19,26 +24,24 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexVisitor;
 import org.apache.calcite.util.ImmutableBitSet;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 public class SubstraitRelVisitor extends RelNodeVisitor<Rel, RuntimeException> {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SubstraitRelVisitor.class);
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(SubstraitRelVisitor.class);
 
   private final SimpleExtension.ExtensionCollection extensions;
   private final RexVisitor<Expression> converter;
   private final AggregateFunctionConverter aggregateFunctionConverter;
 
-  public SubstraitRelVisitor(RelDataTypeFactory typeFactory, SimpleExtension.ExtensionCollection extensions) {
+  public SubstraitRelVisitor(RelDataTypeFactory typeFactory,
+                             SimpleExtension.ExtensionCollection extensions) {
     this.extensions = extensions;
     var converters = new ArrayList<CallConverter>();
     converters.addAll(CallConverters.DEFAULTS);
-    converters.add(new ScalarFunctionConverter(extensions.scalarFunctions(), typeFactory));
+    converters.add(
+        new ScalarFunctionConverter(extensions.scalarFunctions(), typeFactory));
     this.converter = new RexExpressionConverter(converters);
-    this.aggregateFunctionConverter = new AggregateFunctionConverter(extensions.aggregateFunctions(), typeFactory);
+    this.aggregateFunctionConverter = new AggregateFunctionConverter(
+        extensions.aggregateFunctions(), typeFactory);
   }
 
   private Expression toExpression(RexNode node) {
@@ -48,7 +51,8 @@ public class SubstraitRelVisitor extends RelNodeVisitor<Rel, RuntimeException> {
   @Override
   public Rel visit(TableScan scan) {
     var type = TypeConverter.toNamedStruct(scan.getRowType());
-    return NamedScan.builder().initialSchema(type)
+    return NamedScan.builder()
+        .initialSchema(type)
         .addAllNames(scan.getTable().getQualifiedName())
         .build();
   }
@@ -65,17 +69,29 @@ public class SubstraitRelVisitor extends RelNodeVisitor<Rel, RuntimeException> {
       return EmptyScan.builder().initialSchema(type).build();
     }
 
-    List<Expression.StructLiteral> structs = values.getTuples().stream().map(list -> {
-      var fields =  list.stream().map(l -> LiteralConverter.convert(l)).collect(Collectors.toUnmodifiableList());
-      return ExpressionCreator.struct(false, fields);
-    }).collect(Collectors.toUnmodifiableList());
-    return VirtualTableScan.builder().addAllDfsNames(type.names()).addAllRows(structs).build();
+    List<Expression.StructLiteral> structs =
+        values.getTuples()
+            .stream()
+            .map(list -> {
+              var fields = list.stream()
+                               .map(l -> LiteralConverter.convert(l))
+                               .collect(Collectors.toUnmodifiableList());
+              return ExpressionCreator.struct(false, fields);
+            })
+            .collect(Collectors.toUnmodifiableList());
+    return VirtualTableScan.builder()
+        .addAllDfsNames(type.names())
+        .addAllRows(structs)
+        .build();
   }
 
   @Override
   public Rel visit(LogicalFilter filter) {
     var condition = toExpression(filter.getCondition());
-    return Filter.builder().condition(condition).input(apply(filter.getInput())).build();
+    return Filter.builder()
+        .condition(condition)
+        .input(apply(filter.getInput()))
+        .build();
   }
 
   @Override
@@ -85,11 +101,14 @@ public class SubstraitRelVisitor extends RelNodeVisitor<Rel, RuntimeException> {
 
   @Override
   public Rel visit(LogicalProject project) {
-    var expressions = project.getProjects().stream().map(this::toExpression).toList();
+    var expressions =
+        project.getProjects().stream().map(this::toExpression).toList();
 
-    // todo: eliminate excessive projects. This should be done by converting rexinputrefs to remaps.
+    // todo: eliminate excessive projects. This should be done by converting
+    // rexinputrefs to remaps.
     return Project.builder()
-        .remap(Rel.Remap.offset(project.getInput().getRowType().getFieldCount(), expressions.size()))
+        .remap(Rel.Remap.offset(project.getInput().getRowType().getFieldCount(),
+                                expressions.size()))
         .expressions(expressions)
         .input(apply(project.getInput()))
         .build();
@@ -100,7 +119,7 @@ public class SubstraitRelVisitor extends RelNodeVisitor<Rel, RuntimeException> {
     var left = apply(join.getLeft());
     var right = apply(join.getRight());
     var condition = toExpression(join.getCondition());
-    var joinType = switch(join.getJoinType()) {
+    var joinType = switch (join.getJoinType()) {
       case INNER -> Join.JoinType.INNER;
       case LEFT -> Join.JoinType.LEFT;
       case RIGHT -> Join.JoinType.RIGHT;
@@ -206,8 +225,14 @@ public class SubstraitRelVisitor extends RelNodeVisitor<Rel, RuntimeException> {
 
   public static Expression.SortField toSortField(RelFieldCollation collation, Type.Struct inputType) {
     Expression.SortDirection direction = switch(collation.direction) {
-      case STRICTLY_ASCENDING,ASCENDING -> collation.nullDirection == RelFieldCollation.NullDirection.LAST ? Expression.SortDirection.ASC_NULLS_LAST : Expression.SortDirection.ASC_NULLS_FIRST;
-      case STRICTLY_DESCENDING,DESCENDING -> collation.nullDirection == RelFieldCollation.NullDirection.LAST ? Expression.SortDirection.DESC_NULLS_LAST : Expression.SortDirection.DESC_NULLS_FIRST;
+      case STRICTLY_ASCENDING,ASCENDING -> collation.nullDirection == RelFieldCollation.NullDirection.LAST ? Expression.SortDirection.ASC_NULLS_LAST :
+        Expression.SortDirection.ASC_NULLS_FIRST;
+      case STRICTLY_DESCENDING,
+          DESCENDING
+          -> collation.nullDirection == RelFieldCollation.NullDirection.LAST
+                 ? Expression.SortDirection.DESC_NULLS_LAST
+                 :
+        Expression.SortDirection.DESC_NULLS_FIRST;
       case CLUSTERED -> Expression.SortDirection.CLUSTERED;
     };
 

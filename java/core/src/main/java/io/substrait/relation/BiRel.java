@@ -4,7 +4,8 @@ import java.util.Arrays;
 import java.util.List;
 
 public abstract class BiRel extends AbstractRel {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BiRel.class);
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(BiRel.class);
 
   public abstract Rel getLeft();
   public abstract Rel getRight();

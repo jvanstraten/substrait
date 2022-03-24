@@ -3,8 +3,8 @@ package io.substrait.util;
 import java.util.function.Supplier;
 
 public class Util {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Util.class);
-
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(Util.class);
 
   public static <T> Supplier<T> memoize(Supplier<T> supplier) {
     return new Memoizer<T>(supplier);
@@ -16,9 +16,7 @@ public class Util {
     private T value;
     private Supplier<T> delegate;
 
-    public Memoizer(Supplier<T> delegate) {
-      this.delegate = delegate;
-    }
+    public Memoizer(Supplier<T> delegate) { this.delegate = delegate; }
 
     @Override
     public T get() {
@@ -28,9 +26,7 @@ public class Util {
       }
       return value;
     }
-
   }
-
 
   public static class IntRange {
     private final int startInclusive;
@@ -45,13 +41,9 @@ public class Util {
       this.endExclusive = endExclusive;
     }
 
-    public int getStartInclusive() {
-      return startInclusive;
-    }
+    public int getStartInclusive() { return startInclusive; }
 
-    public int getEndExclusive() {
-      return endExclusive;
-    }
+    public int getEndExclusive() { return endExclusive; }
 
     public boolean within(int val) {
       return val >= startInclusive && val < endExclusive;

@@ -2,12 +2,15 @@ package io.substrait.function;
 
 import io.substrait.type.Type;
 
-public class ToTypeString extends ParameterizedTypeVisitor.ParameterizedTypeThrowsVisitor<String, RuntimeException> {
+public class ToTypeString
+    extends ParameterizedTypeVisitor
+                .ParameterizedTypeThrowsVisitor<String, RuntimeException> {
 
   public static ToTypeString INSTANCE = new ToTypeString();
 
   private ToTypeString() {
-    super("Only type literals and parametertized types can be used in functions.");
+    super(
+        "Only type literals and parametertized types can be used in functions.");
   }
 
   @Override
@@ -126,7 +129,8 @@ public class ToTypeString extends ParameterizedTypeVisitor.ParameterizedTypeThro
   }
 
   @Override
-  public String visit(ParameterizedType.FixedChar expr) throws RuntimeException {
+  public String visit(ParameterizedType.FixedChar expr)
+      throws RuntimeException {
     return "fchar";
   }
 
@@ -136,7 +140,8 @@ public class ToTypeString extends ParameterizedTypeVisitor.ParameterizedTypeThro
   }
 
   @Override
-  public String visit(ParameterizedType.FixedBinary expr) throws RuntimeException {
+  public String visit(ParameterizedType.FixedBinary expr)
+      throws RuntimeException {
     return "fbinary";
   }
 
@@ -161,12 +166,12 @@ public class ToTypeString extends ParameterizedTypeVisitor.ParameterizedTypeThro
   }
 
   @Override
-  public String visit(ParameterizedType.StringLiteral expr) throws RuntimeException {
+  public String visit(ParameterizedType.StringLiteral expr)
+      throws RuntimeException {
     if (expr.value().toLowerCase().startsWith("any")) {
       return expr.value();
     } else {
       return super.visit(expr);
     }
   }
-
 }

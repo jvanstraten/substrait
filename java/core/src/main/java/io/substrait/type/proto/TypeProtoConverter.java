@@ -4,66 +4,97 @@ import io.substrait.function.TypeExpressionVisitor;
 import io.substrait.proto.Type;
 
 public class TypeProtoConverter extends BaseProtoConverter<Type, Integer> {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TypeProtoConverter.class);
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(TypeProtoConverter.class);
 
-  public static TypeExpressionVisitor<Type, RuntimeException> INSTANCE = new TypeProtoConverter();
+  public static TypeExpressionVisitor<Type, RuntimeException> INSTANCE =
+      new TypeProtoConverter();
 
   public TypeProtoConverter() {
     super("Type literals cannot contain parameters or expressions.");
   }
 
-  private static final BaseProtoTypes<Type, Integer> NULLABLE = new Types(Type.Nullability.NULLABILITY_NULLABLE);
-  private static final BaseProtoTypes<Type, Integer> REQUIRED = new Types(Type.Nullability.NULLABILITY_REQUIRED);
+  private static final BaseProtoTypes<Type, Integer> NULLABLE =
+      new Types(Type.Nullability.NULLABILITY_NULLABLE);
+  private static final BaseProtoTypes<Type, Integer> REQUIRED =
+      new Types(Type.Nullability.NULLABILITY_REQUIRED);
 
-  @Override public BaseProtoTypes<Type, Integer> typeContainer(final boolean nullable) {
+  @Override
+  public BaseProtoTypes<Type, Integer> typeContainer(final boolean nullable) {
     return nullable ? NULLABLE : REQUIRED;
   }
 
   private static class Types extends BaseProtoTypes<Type, Integer> {
 
-    public Types(final Type.Nullability nullability) {
-      super(nullability);
-    }
+    public Types(final Type.Nullability nullability) { super(nullability); }
 
     public Type fixedChar(Integer len) {
-      return wrap(Type.FixedChar.newBuilder().setLength(len).setNullability(nullability).build());
+      return wrap(Type.FixedChar.newBuilder()
+                      .setLength(len)
+                      .setNullability(nullability)
+                      .build());
     }
 
-    @Override public Type typeParam(final String name) {
-      throw new UnsupportedOperationException("It is not possible to use parameters in basic types.");
+    @Override
+    public Type typeParam(final String name) {
+      throw new UnsupportedOperationException(
+          "It is not possible to use parameters in basic types.");
     }
 
-    @Override public Integer integerParam(final String name) {
-      throw new UnsupportedOperationException("It is not possible to use parameters in basic types.");
+    @Override
+    public Integer integerParam(final String name) {
+      throw new UnsupportedOperationException(
+          "It is not possible to use parameters in basic types.");
     }
 
     public Type varChar(Integer len) {
-      return wrap(Type.VarChar.newBuilder().setLength(len).setNullability(nullability).build());
+      return wrap(Type.VarChar.newBuilder()
+                      .setLength(len)
+                      .setNullability(nullability)
+                      .build());
     }
 
     public Type fixedBinary(Integer len) {
-      return wrap(Type.FixedBinary.newBuilder().setLength(len).setNullability(nullability).build());
+      return wrap(Type.FixedBinary.newBuilder()
+                      .setLength(len)
+                      .setNullability(nullability)
+                      .build());
     }
 
     public Type decimal(Integer scale, Integer precision) {
-      return wrap(Type.Decimal.newBuilder().setScale(scale).setPrecision(precision).setNullability(nullability).build());
+      return wrap(Type.Decimal.newBuilder()
+                      .setScale(scale)
+                      .setPrecision(precision)
+                      .setNullability(nullability)
+                      .build());
     }
 
     public Type struct(Iterable<Type> types) {
-      return wrap(Type.Struct.newBuilder().addAllTypes(types).setNullability(nullability).build());
+      return wrap(Type.Struct.newBuilder()
+                      .addAllTypes(types)
+                      .setNullability(nullability)
+                      .build());
     }
 
     public Type list(Type type) {
-      return wrap(Type.List.newBuilder().setType(type).setNullability(nullability).build());
+      return wrap(Type.List.newBuilder()
+                      .setType(type)
+                      .setNullability(nullability)
+                      .build());
     }
 
     public Type map(Type key, Type value) {
-      return wrap(Type.Map.newBuilder().setKey(key).setValue(value).setNullability(nullability).build());
+      return wrap(Type.Map.newBuilder()
+                      .setKey(key)
+                      .setValue(value)
+                      .setNullability(nullability)
+                      .build());
     }
 
-    @Override protected Type wrap(final Object o) {
+    @Override
+    protected Type wrap(final Object o) {
       var bldr = Type.newBuilder();
-      return switch(o) {
+      return switch (o) {
         case Type.Boolean t -> bldr.setBool(t).build();
         case Type.I8 t -> bldr.setI8(t).build();
         case Type.I16 t -> bldr.setI16(t).build();

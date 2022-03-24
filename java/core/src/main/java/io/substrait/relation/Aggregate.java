@@ -4,17 +4,17 @@ import io.substrait.expression.AggregateFunctionInvocation;
 import io.substrait.expression.Expression;
 import io.substrait.type.Type;
 import io.substrait.type.TypeCreator;
-import org.immutables.value.Value;
-
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.immutables.value.Value;
 
 @Value.Immutable
 public abstract class Aggregate extends SingleInputRel {
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Aggregate.class);
+  static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(Aggregate.class);
 
   public abstract List<Grouping> getGroupings();
 
@@ -22,17 +22,17 @@ public abstract class Aggregate extends SingleInputRel {
 
   @Override
   protected Type.Struct deriveRecordType() {
-    return TypeCreator.REQUIRED.struct(
-      Stream.concat(
-          // unique grouping expressions
-          getGroupings().stream()
-              .flatMap(g -> g.getExpressions().stream())
-              .collect(Collectors.toCollection(LinkedHashSet::new))
-              .stream().map(Expression::getType),
+    return TypeCreator.REQUIRED.struct(Stream.concat(
+        // unique grouping expressions
+        getGroupings()
+            .stream()
+            .flatMap(g -> g.getExpressions().stream())
+            .collect(Collectors.toCollection(LinkedHashSet::new))
+            .stream()
+            .map(Expression::getType),
 
-          // measures
-          getMeasures().stream().map(t -> t.getFunction().getType())
-          ));
+        // measures
+        getMeasures().stream().map(t -> t.getFunction().getType())));
   }
 
   @Override

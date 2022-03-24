@@ -2,11 +2,10 @@ package io.substrait.relation;
 
 import io.substrait.type.Type;
 import io.substrait.type.TypeCreator;
-import org.immutables.value.Value;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
+import org.immutables.value.Value;
 
 public interface Rel {
   Optional<Remap> getRemap();
@@ -28,7 +27,8 @@ public interface Rel {
     }
 
     public static Remap offset(int start, int length) {
-      return of(IntStream.range(start, start + length).mapToObj(i -> i).toList());
+      return of(
+          IntStream.range(start, start + length).mapToObj(i -> i).toList());
     }
   }
 
