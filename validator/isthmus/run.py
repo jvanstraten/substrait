@@ -37,7 +37,7 @@ if __name__ == '__main__':
 
     # Clear output directory.
     if os.path.isdir(output_path):
-        shutil.rmdir(output_path)
+        shutil.rmtree(output_path)
     os.makedirs(output_path)
 
     # Build isthmus if it hasn't already been built.
