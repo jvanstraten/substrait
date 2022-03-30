@@ -202,7 +202,7 @@ fn parse_extension_mapping_data(
             let yaml_info = proto_primitive_field!(x, y, extension_uri_reference, parse_uri_reference).1;
             let anchor = proto_primitive_field!(x, y, type_variation_anchor, parse_anchor).1;
             let name = proto_primitive_field!(x, y, name, parse_name).1;
-
+            
             // If we successfully resolved the URI reference to a URI, resolved
             // that URI, and managed to parse the YAML it pointed to, try to
             // resolve the type variation in it.

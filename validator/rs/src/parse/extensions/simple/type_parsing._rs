@@ -1,0 +1,144 @@
+// SPDX-License-Identifier: Apache-2.0
+
+//! Module providing string parsing and management of type expressions.
+
+use crate::output::data_type;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+/// A parameterized type, contrasting with [data_type::DataType] in that it may
+/// not be fully specified without context.
+pub struct ParameterizedType {
+    /// Type class (simple, compound, or user-defined).
+    class: data_type::Class,
+
+    /// Nullability.
+    nullable: Rc<Expression>,
+
+    /// Type variation, if any.
+    variation: data_type::Variation,
+
+    /// Type parameters for non-simple types.
+    parameters: Option<Vec<Parameter>>,
+}
+
+/// A "parameterized parameter."
+pub struct Parameter {
+    /// Optional name for named type parameters.
+    pub name: Option<String>,
+
+    /// The expression representing the parameter value.
+    pub expression: Rc<Expression>,
+}
+
+/// A meta type, i.e. the possible types of a type parameter.
+pub enum MetaType {
+    /// The associated parameter is a data type.
+    DataType,
+
+    /// The associated parameter is an unsigned integer.
+    Integer,
+
+    /// The associated parameter is a boolean.
+    Boolean,
+}
+
+/// A type parameter expression.
+/// 
+/// Type expressions deal with the following "metatypes": data types, unsigned
+/// integers, and booleans.
+pub enum Expression {
+    /// Error marker, used when a value is completely unknown.
+    Unresolved,
+
+    /// A literal value.
+    Literal(Literal),
+
+    /// A binding, resolved by some context or constraints.
+    Binding(String),
+
+    /// Applies a function.
+    Function(Function, Vec<Rc<Expression>>),
+}
+
+/// A type parameter literal.
+pub enum Literal {
+    /// A specified type parameter.
+    TypeLiteral(ParameterizedType),
+
+    /// A specified integer paramater.
+    IntegerLiteral(u64),
+
+    /// A specified boolean parameter.
+    BooleanLiteral(bool),
+}
+
+/// A (builtin) function used to resolve type expressions.
+pub enum Function {
+    /// Error marker for unknown functions.
+    Unresolved(String),
+}
+
+/// A constraint on a binding.
+pub enum Constraint {
+    /// The metatype of the associated binding must be one of these.
+    MetaTypeSet(Vec<MetaType>),
+
+    /// The associated binding must be a data type within this set.
+    DataTypeSet(Vec<ParameterizedType>),
+
+    /// The associated binding must be an integer within one of the specified
+    /// inclusive ranges.
+    IntegerSet(Vec<(u64, u64)>),
+
+    /// The associated binding must equal the result of the given expression
+    /// exactly.
+    Equals(Rc<Expression>),
+}
+
+/// A set of constraints imposed on a binding.
+pub enum Constraints {
+    /// The constraints could not be solved due to an error somewhere.
+    Unresolved,
+
+    /// The constraints were solved, loading to the given value.
+    Solved(Literal),
+
+    /// The following constraints are currently imposed on the binding.
+    Unsolved(Vec<Constraint>),
+
+    /// The value for the binding could not be solved due to (at least) the
+    /// following conflicting requirements.
+    Conflicting(Constraint, Constraint),
+}
+
+impl Default for Constraints {
+    fn default() -> Self {
+        Constraints::Unsolved(vec![])
+    }
+}
+
+pub struct Solver {
+    /// The constraints active for each binding in the current solving scope.
+    /// If a binding has no entry here, it is fully unconstrained.
+    bindings: HashMap<String, Constraints>
+}
+
+impl Solver {
+
+    pub fn get_constraints(&self, binding: &str) -> Constraints {
+        self.bindings.get(binding).unwrap_or_default()
+    }
+
+    /// Attempts to evaluate the given expression.
+    pub fn evaluate(&self, expression: &Expression) -> Constraints {
+        match expression {
+            Expression::Unresolved => Constraints::Unresolved,
+            Expression::Literal(x) => Constraints::Solved(x.clone()),
+            Expression::Binding(x) => {
+                self.bindings.
+            },
+            Expression::Function(_, _) => todo!(),
+        }
+    }
+}
