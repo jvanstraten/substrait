@@ -256,8 +256,8 @@ class _JsomFormatter:
 _JSOM_MACROS = """@macros
 .field .selection { .directReference .structField .field ?v .rootReference {} }
 .field0 .selection { .directReference .structField {} .rootReference {} }
-.nullable .nullability "NULLABILITY_NULLABLE"
-.required .nullability "NULLABILITY_REQUIRED"
+.nullable < .nullability "NULLABILITY_NULLABLE" >
+.required < .nullability "NULLABILITY_REQUIRED" >
 
 @output
 """
