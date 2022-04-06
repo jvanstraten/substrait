@@ -18,6 +18,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v2
+    - name: Install sdist-only dependencies
+      if: ${{ matrix.type == 'sdist' }}
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - name: sdist-only build prep
+      if: ${{ matrix.type == 'sdist' }}
+      working-directory: validator/rs
+      run: cargo check
+      # ^ this ensures that its build.rs is run, which is all we need. Sadly
+      # there doesn't seem to be a way to do this that doesn't pull in all
+      # normal dependencies: https://github.com/rust-lang/cargo/issues/7178
     - name: Install build dependencies
       run: python3 -m pip install --upgrade pip maturin
     - name: Prepare build environment
@@ -49,7 +63,7 @@ jobs:
         command: build
         args: --release --no-sdist -o dist --universal2 -m validator/py/Cargo.toml
     - name: Install runtime dependencies
-      run: python3 -m pip install --upgrade protobuf pytest click pyyaml git+https://github.com/saulpw/jsom.git@99bc533
+      run: python3 -m pip install --upgrade protobuf pytest click pyyaml git+https://github.com/saulpw/jsom.git@d41b2b4
     - name: Install generated sdist
       if: ${{ matrix.type == 'sdist' }}
       run: python3 -m pip install dist/substrait_validator-*.tar.gz
@@ -82,3 +96,15 @@ jobs:
         with:
           command: upload
           args: --skip-existing *
+
+  fmt-lint:
+    name: Format & lint
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: python3 -m pip install --upgrade pip black==22.3.0 flake8==4.0.1
+    - name: Black
+      run: python3 -m black --diff --check .
+    - name: Flake8
+      run: python3 -m flake8 .

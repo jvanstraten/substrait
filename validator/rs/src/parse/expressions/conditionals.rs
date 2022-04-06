@@ -11,6 +11,12 @@ use crate::parse::expressions::literals;
 use crate::parse::types;
 use std::sync::Arc;
 
+// FIXME: what promotions are allowed and when? I saw Isthmus output an
+// if/else with branches differing in nullability, and that makes sense to me
+// as something to support. But on the other hand, explicit type casts for
+// everything might be nicer for a machine format. Either way, I'm not sure
+// the specification has anything to say about this?
+
 /// Parse an if-then expression. Returns a description of said expression.
 pub fn parse_if_then(
     x: &substrait::expression::IfThen,
@@ -22,19 +28,26 @@ pub fn parse_if_then(
     // Handle branches.
     proto_required_repeated_field!(x, y, ifs, |x, y| {
         // Parse fields.
-        let condition = proto_required_field!(x, y, r#if, expressions::parse_predicate)
-            .1
-            .unwrap_or_default();
+        let (n, e) = proto_required_field!(x, y, r#if, expressions::parse_predicate);
+        let condition = e.unwrap_or_default();
+        let condition_type = n.data_type();
         let (n, e) = proto_required_field!(x, y, then, expressions::parse_expression);
         let value = e.unwrap_or_default();
+        let value_type = n.data_type();
 
         // Check that the type is the same for each branch.
-        return_type = types::assert_equal(
+        return_type = types::promote_and_assert_equal(
             y,
-            &n.data_type(),
+            &value_type,
             &return_type,
             "branches must yield the same type",
         );
+
+        // Nulls in the condition are propagated to the output.
+        // FIXME: I guess?
+        if !condition_type.is_unresolved() && condition_type.nullable() {
+            return_type = return_type.make_nullable();
+        }
 
         // Describe this branch.
         describe!(y, Misc, "If {} yield {}", &condition, &value);
@@ -54,7 +67,7 @@ pub fn parse_if_then(
         let value = e.unwrap_or_default();
 
         // Check that the type is the same for each branch.
-        return_type = types::assert_equal(
+        return_type = types::promote_and_assert_equal(
             y,
             &n.data_type(),
             &return_type,
@@ -106,7 +119,7 @@ pub fn parse_switch(
         let match_value = e.unwrap_or_default();
 
         // Check that the type is the same for each branch.
-        match_type = types::assert_equal(
+        match_type = types::promote_and_assert_equal(
             y,
             &n.data_type(),
             &match_type,
@@ -118,7 +131,7 @@ pub fn parse_switch(
         let value = e.unwrap_or_default();
 
         // Check that the type is the same for each branch.
-        return_type = types::assert_equal(
+        return_type = types::promote_and_assert_equal(
             y,
             &n.data_type(),
             &return_type,
@@ -143,7 +156,7 @@ pub fn parse_switch(
         let value = e.unwrap_or_default();
 
         // Check that the type is the same for each branch.
-        return_type = types::assert_equal(
+        return_type = types::promote_and_assert_equal(
             y,
             &n.data_type(),
             &return_type,

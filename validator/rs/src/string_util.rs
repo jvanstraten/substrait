@@ -6,9 +6,9 @@ use crate::output::diagnostic;
 
 /// Returns whether the given string is a valid identifier.
 pub fn is_identifier(s: &str) -> bool {
-    static IDENTIFIER_RE: once_cell::sync::Lazy<fancy_regex::Regex> =
-        once_cell::sync::Lazy::new(|| fancy_regex::Regex::new("[a-zA-Z_][a-zA-Z0-9_]*").unwrap());
-    IDENTIFIER_RE.is_match(s).unwrap_or_default()
+    static IDENTIFIER_RE: once_cell::sync::Lazy<regex::Regex> =
+        once_cell::sync::Lazy::new(|| regex::Regex::new("[a-zA-Z_][a-zA-Z0-9_]*").unwrap());
+    IDENTIFIER_RE.is_match(s)
 }
 
 /// Checks an URI for validity.
@@ -129,6 +129,11 @@ impl Limit {
     /// print everything).
     pub fn unlimited() -> Self {
         Self { limit: None }
+    }
+
+    /// Returns the character limit in number of characters.
+    pub fn chars(&self) -> usize {
+        self.limit.unwrap_or(usize::MAX)
     }
 
     /// Splits this limit up into two limits. The first limit will use all
@@ -294,8 +299,14 @@ pub fn describe_string(
 
 /// Represent data as a complete hexdump.
 fn describe_binary_all(f: &mut std::fmt::Formatter<'_>, data: &[u8]) -> std::fmt::Result {
+    let mut first = true;
     for byte in data {
-        write!(f, "{byte:08X}")?;
+        if first {
+            first = false;
+        } else {
+            write!(f, " ")?;
+        }
+        write!(f, "{byte:02X}")?;
     }
     Ok(())
 }
@@ -308,7 +319,7 @@ pub fn describe_binary(
     data: &[u8],
     limit: Limit,
 ) -> std::fmt::Result {
-    let (n_left, n_right, _) = limit.split_n(data.len(), 2);
+    let (n_left, n_right, _) = limit.split_n(data.len(), 3);
     describe_binary_all(f, &data[..n_left])?;
     if let Some(n_right) = n_right {
         write!(f, "..")?;

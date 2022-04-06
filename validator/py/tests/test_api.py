@@ -37,9 +37,8 @@ def test_proto_roundtrip():
     # Round-trip via JSOM.
     data = sv.plan_to_jsom(original_plan)
     assert type(data) is str
-    # TODO: disabled due to bugs in JSOM
-    #round_tripped_plan = sv.load_plan_from_jsom(data)
-    #assert round_tripped_plan == original_plan
+    round_tripped_plan = sv.load_plan_from_jsom(data)
+    assert round_tripped_plan == original_plan
 
     # Check identity.
     round_tripped_plan = sv.load_plan(original_plan)
@@ -62,9 +61,9 @@ def test_export_html():
     """Test the HTML export function."""
     html = sv.plan_to_html(BASIC_PLAN)
     assert type(html) == str
-    lines = list(filter(bool, html.split('\n')))
-    assert lines[0] == '<!DOCTYPE html>'
-    assert lines[-1] == '</html>'
+    lines = list(filter(bool, html.split("\n")))
+    assert lines[0] == "<!DOCTYPE html>"
+    assert lines[-1] == "</html>"
 
 
 def test_export_diags():
@@ -81,7 +80,7 @@ def test_valid_invalid():
     """Test the plan validity functions."""
     # Override all diagnostics to info, so the plan is considered valid.
     config = sv.Config()
-    config.override_diagnostic_level(0, 'info', 'info')
+    config.override_diagnostic_level(0, "info", "info")
     plan = sv.plan_to_result_handle(BASIC_PLAN, config)
     assert sv.check_plan(plan) == 1
     sv.check_plan_valid(plan)
@@ -90,7 +89,7 @@ def test_valid_invalid():
     # Override all diagnostics to warning, so the validity is considered to be
     # unknown.
     config = sv.Config()
-    config.override_diagnostic_level(0, 'warning', 'warning')
+    config.override_diagnostic_level(0, "warning", "warning")
     plan = sv.plan_to_result_handle(BASIC_PLAN, config)
     assert sv.check_plan(plan) == 0
     with pytest.raises(ValueError):
@@ -100,7 +99,7 @@ def test_valid_invalid():
     # Override all diagnostics to error, so the plan is considered to be
     # invalid.
     config = sv.Config()
-    config.override_diagnostic_level(0, 'error', 'error')
+    config.override_diagnostic_level(0, "error", "error")
     plan = sv.plan_to_result_handle(BASIC_PLAN, config)
     assert sv.check_plan(plan) == -1
     with pytest.raises(ValueError):
@@ -113,29 +112,45 @@ def test_resolver_callback():
     """Tests whether the YAML URI resolver callback works."""
 
     def resolver(s):
-        if s == 'test:hello':
-            return BASIC_YAML.encode('utf-8')
-        raise ValueError('unknown URI')
+        if s == "test:hello":
+            return BASIC_YAML.encode("utf-8")
+        raise ValueError("unknown URI")
 
     config = sv.Config()
+
+    # Disable "not yet implemented" warnings.
+    config.override_diagnostic_level(1, "info", "info")
+
+    # Disable missing root relation error, so we don't have to supply one.
+    config.override_diagnostic_level(5001, "info", "info")
+
+    # Add the resolver.
     config.add_uri_resolver(resolver)
 
-    diags = list(sv.plan_to_diagnostics({
-        'extensionUris': [{
-            'extension_uri_anchor': 1,
-            'uri': 'test:hello',
-        }]
-    }, config))
-    for diag in diags:
-        print(diag.msg)
-    assert diags[0].msg == 'not yet implemented: the following child nodes were not recognized by the validator: types (code 0001)'
+    sv.check_plan_valid(
+        {
+            "extensionUris": [
+                {
+                    "extension_uri_anchor": 1,
+                    "uri": "test:hello",
+                }
+            ]
+        },
+        config,
+    )
 
-    diags = list(sv.plan_to_diagnostics({
-        'extensionUris': [{
-            'extension_uri_anchor': 1,
-            'uri': 'test:bye',
-        }]
-    }, config))
-    for diag in diags:
-        print(diag.msg)
-    assert diags[0].msg == 'failed to resolve YAML: ValueError: unknown URI (code 2002)'
+    with pytest.raises(
+        ValueError,
+        match=r"failed to resolve YAML: ValueError: unknown URI \(code 2002\)",
+    ):
+        sv.check_plan_valid(
+            {
+                "extensionUris": [
+                    {
+                        "extension_uri_anchor": 1,
+                        "uri": "test:bye",
+                    }
+                ]
+            },
+            config,
+        )
