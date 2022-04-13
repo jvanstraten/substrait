@@ -3,14 +3,14 @@ State of test suite coverage
 
  - [ ] TPC-H (integration tests)
     - [x] 1
-    - [ ] 2
+    - [x] 2
     - [x] 3
-    - [ ] 4
+    - [x] 4
     - [x] 5
     - [x] 6
-    - [ ] 7
-    - [ ] 8
-    - [ ] 9
+    - [x] 7
+    - [x] 8
+    - [x] 9
     - [x] 10
     - [ ] 11
     - [ ] 12
@@ -33,21 +33,28 @@ State of test suite coverage
     - [x] References
     - [x] Conditionals
     - [x] Subqueries
- - [ ] Relations
-    - [ ] Relation root
-    - [ ] Common logic
-    - [ ] Aggregate
-    - [ ] Cross
-    - [ ] Extensions
-    - [ ] Fetch
-    - [ ] Filter
-    - [ ] Join
-    - [ ] Project
-    - [ ] Read
-    - [ ] Set
-    - [ ] Sort
+ - [x] Relations
+    - [x] Relation root
+    - [x] Common logic
+    - [x] Read
+       - [x] Virtual data source
+       - [x] Named data source
+       - [x] File data source
+       - [x] Extension data source
+       - [x] Base schema
+       - [x] Filter
+       - [x] Projection
+    - [x] Filter
+    - [x] Sort
+    - [x] Project
+    - [x] Cross
+    - [x] Join
+    - [x] Set
+    - [x] Fetch
+    - [x] Aggregate
+    - [x] Extensions
  - [ ] Extensions
     - [ ] Types
     - [ ] Type variations
     - [ ] Functions
-    - [ ] Advanced extensions
+    - [x] Advanced extensions
