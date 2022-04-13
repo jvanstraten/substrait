@@ -253,6 +253,12 @@ pub enum Classification {
     #[strum(props(Description = "mismatched type variation"))]
     TypeMismatchedVariation = 4007,
 
+    #[strum(props(Description = "underconstrained type expression"))]
+    TypeUnderconstrained = 4008,
+
+    #[strum(props(Description = "overconstrained type expression"))]
+    TypeOverconstrained = 4009,
+
     // Relation-related diagnostics (group 5).
     #[strum(props(HiddenDescription = "relation-related diagnostics"))]
     Relation = 5000,
