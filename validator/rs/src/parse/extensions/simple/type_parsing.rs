@@ -40,8 +40,10 @@ use crate::output::data_type;
 use crate::output::diagnostic;
 use crate::string_util;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::BTreeSet;
 use std::rc::Rc;
+use num_traits::bounds::Bounded;
 
 /// A metatype, i.e. the type of a value that a generic can assume during the
 /// constraint-solving process.
@@ -226,20 +228,99 @@ pub enum MetaFunction {
 }
 
 /// A set of integers described by inclusive ranges.
-pub struct IntegerSet {
-    ranges: BTreeSet<(i64, i64)>,
+#[derive(Clone, Debug)]
+pub struct IntegerSet<V: Ord + Clone + num_traits::bounds::Bounded> {
+    /// The values for which set containment flips. For example, the flips
+    /// [1, 4, 5, 6, 7] represent the ranges [1, 4), [5, 6), [7, MAX].
+    flips: BTreeSet<V>,
 }
 
-impl IntegerSet {
-    pub fn add(&mut self, from: i64, to: i64) {
-
+impl<V: Ord + Clone + num_traits::bounds::Bounded> IntegerSet<V> {
+    /// Performs an arbitrary set operation by combining the given sets into a
+    /// single set using the given operation. Whether a value v is in the
+    /// resulting set is functionally determined as follows (though the
+    /// implementation is more efficient):
+    ///  - each input set is assigned a weight (the i32 associated with it);
+    ///  - for each value v, the weights if the input sets it is contained in
+    /// is summed;
+    ///  - v is in the resulting set iff contained(sum_of_weights).
+    fn arbitrary<F: Fn(i32) -> bool>(sets: &[(&IntegerSet<V>, i32)], contained: F) -> IntegerSet<V> {
+        todo!()
     }
-
-    pub fn intersect_with(&mut self, from: i64, to: i64) {
-    }
-
-    pub fn subtract()
 }
+
+/// Combines the given sets of ranges of V into a single set of ranges of V
+/// using the given operation. Whether a value v is in the resulting set is
+/// functionally determined as follows (though the implementation is more
+/// efficient):
+///  - each input set is assigned a weight (the i32 associated with it);
+///  - for each value v, the weights if the input sets it is contained in is
+///    summed;
+///  - v is in the resulting set iff contained(sum_of_weights).
+/// 
+/// The sets are represented as sorted unique integers representing the values
+/// where set containment flips. For example, [1, 4, 5, 6, 7] represents
+/// [1, 4), [5, 6), [7, MAX].
+/// 
+/// Examples:
+///  - union/or: set_operation(&[(a, 1), (b, 1)], |w| w > 0)
+///  - difference: set_operation(&[(a, 1), (b, -1)], |w| w > 0)
+///  - intersection/and: set_operation(&[(a, 1), (b, 1)], |w| w > 1)
+///  - xor: set_operation(&[(a, 1), (b, 1)], |w| w & 1 == 1)
+///  - invert/not: set_operation(&[(a, 1)], |w| w == 0)
+///  - empty set: set_operation(&[], |w| w != 0)
+///  - complete set: set_operation(&[], |w| w == 0)
+fn set_operation<V, F>(sets: &[(&BTreeSet<V>, i32)], contained: F) -> BTreeSet<V>
+where
+    V: Ord + Clone + num_traits::bounds::Bounded,
+    F: Fn(i32) -> bool,
+{
+    // Make an iterator for each input set that yields
+    // (value, weight_delta) pairs. This allows us to merge the iterators
+    // together while accumulating the weights we encounter to get
+    // (value, weight) pairs.
+    let mut sets = sets.into_iter().map(|(set, weight)| {
+        let weight = *weight;
+        set.iter().enumerate().map(move |(i, v)| (v.clone(), if i & 1 == 1 { weight } else { -weight })).peekable()
+    }).collect::<Vec<_>>();
+
+    // The resulting set.
+    let mut result = BTreeSet::new();
+
+    // Whether the latest entry we pushed into result opens or closes a
+    // range.
+    let mut in_set = false;
+
+    // Weight accumulator.
+    let mut weight = 0;
+    
+    // Iterating over the merged input set iterators will only yield values
+    // where the weight (may) change. If none of the input sets include the
+    // minimum value of V and we would only iterate over them, that means
+    // we'd never have a change to include V::MIN, even if contained(0)
+    // yields true. This option is used to always check V::MIN as well.
+    let mut first = Some(V::min_value());
+
+    // Find the next value that we need to compute the weight for.
+    while let Some(value) = first.take().or_else(|| sets.iter_mut().filter_map(|s| s.peek().map(|(v, _)| v)).min().cloned()) {
+        // Take from all iterators that will return exactly value, and
+        // accumulate the weights associated with them.
+        weight += sets.iter_mut().filter_map(|s| s.next_if(|(v2, _)| v2 == &value).map(|(_, w)| w)).sum::<i32>();
+
+        // Determine whether the new weight corresponds to values that
+        // should be contained in the resulting set.
+        let new_in_set = contained(weight);
+
+        // If the set containment flips, push the value in the resulting
+        // set.
+        if new_in_set != in_set {
+            in_set = new_in_set;
+            assert!(result.insert(value));
+        }
+    }
+    result
+}
+
 
 /// The types of constraints that can be imposed on metavariables.
 #[derive(Clone, Debug)]
@@ -252,7 +333,7 @@ pub enum ConstraintType {
 
     /// The associated metavariable must be an integer within one of the
     /// specified inclusive ranges.
-    IntegerSet(IntegerSet),
+    IntegerSet(IntegerSet<i64>),
 
     /// A function. Once all variables that need to be known to evaluate the
     /// function are known, the solver will replace this with an Exactly.
@@ -480,7 +561,7 @@ impl Context {
     /// could be performed, or Ok(Some(constraints)) if the constraint set
     /// was successfully reduced.
     fn reduce(&mut self, constraints: Vec<Constraint>) -> diagnostic::Result<Option<Vec<Constraint>>> {
-        let mut new_constraints_a;
+        /*let mut new_constraints_a;
         let mut new_constraints_b;
         let mut reduced = false;
         for new in constraints {
@@ -496,13 +577,14 @@ impl Context {
             Some(new_constraints)
         } else {
             None
-        })
+        })*/
+        todo!()
     }
 
     /// Solve constraints until all metavariables are resolved to a single
     /// value.
     pub fn solve(&mut self, allow_underconstrained: bool) -> diagnostic::Result<()> {
-
+        /*
         // Add constraints to variables based on how they are used. First of
         // all, function parameter and return types must be data types.
         for variable in self.variables.values_mut() {
@@ -554,6 +636,8 @@ impl Context {
             }
         }
         Ok(())
+        */
+        todo!()
     }
 }
 
