@@ -37,676 +37,565 @@
 //! to make sense of this module; it doesn't get any easier :)
 
 use crate::output::data_type;
+use crate::output::data_type::ParameterInfo;
 use crate::output::diagnostic;
 use crate::string_util;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::collections::BTreeSet;
+use std::cell::RefCell;
 use std::rc::Rc;
-use num_traits::bounds::Bounded;
+use std::sync::Arc;
 
-/// A metatype, i.e. the type of a value that a generic can assume during the
-/// constraint-solving process.
-#[derive(Clone, Copy, Debug)]
-pub enum MetaType {
-    /// A data type.
-    DataType,
-
-    /// An integer.
-    Integer,
-
-    /// A boolean.
-    Boolean
-}
-
-/// A metavalue, i.e. a fully-specified value of a metatype.
+/// A pattern that matches some set of data types.
+/// 
+/// Types are printed/parsed in the following order:
+/// 
+///  - class;
+///  - nullability;
+///  - variation;
+///  - parameter pack.
+/// 
+/// Intentionally convoluted example: `struct?x[?]<>` matches any variation of
+/// an empty struct with nullability `x`.
+/// 
+/// When a data type pattern is successfully matched against a concrete type,
+/// this may impose constraints on metavariables referenced in the pattern.
 #[derive(Clone, Debug)]
-pub enum MetaValue {
-    /// A data type.
-    DataType(data_type::DataType),
+pub struct DataTypePattern {
+    /// Type class (simple, compound, or user-defined).
+    pub class: data_type::Class,
 
-    /// An integer.
-    Integer(i64),
+    /// Nullability. Must map to a boolean metavariable.
+    ///  - generic -> printed/parsed as `class?generic`.
+    ///  - anonymous -> printed/parsed as `class?_123`.
+    ///  - resolved to true -> printed/parsed as `class?`.
+    ///  - resolved to false -> printed/parsed as `class`.
+    pub nullable: MetaVariableReference,
 
-    /// A boolean.
-    Boolean(bool),
+    /// Type variation, if specified. Note that data_type::Variation is itself
+    /// an option:
+    ///  - None -> variation is unspecified; this parameterized type matches
+    ///    any variation. Printed/parsed as `class[?]`.
+    ///  - Some(None) -> this parameterized type is the base variation of
+    ///    class. Printed as `class`, parsed as `class` or `class[]`.
+    ///  - Some(Some(variation)) -> this parameterized type is the specified
+    ///    variation of class. Printed/parsed as `class[variation]`.
+    pub variation: Option<data_type::Variation>,
+
+    /// Parameters for parameterized types. Must be set to Some([]) for
+    /// non-parameterizable types.
+    ///  - None -> parameters are unspecified. Any number of parameters can be
+    ///    matched, within the constraints of class. Printed/parsed as `class`,
+    ///    even if class requires parameters.
+    ///  - Some([]) -> parameters are specified to be an empty list.
+    ///    Printed/parsed as `class<>`
+    ///  - Some([a, b, c]) -> printed/parsed as `class<a, b, c>`.
+    pub parameters: Option<Vec<DataTypeParameter>>,
 }
 
-impl MetaValue {
-    /// Returns the metatype of this metavalue.
-    pub fn metatype(&self) -> MetaType {
-        match self {
-            MetaValue::DataType(_) => MetaType::DataType,
-            MetaValue::Integer(_) => MetaType::Integer,
-            MetaValue::Boolean(_) => MetaType::Boolean,
+impl std::fmt::Display for DataTypePattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Class description.
+        write!(f, "{}", self.class)?;
+
+        // Nullable flag.
+        match self.nullable.value().as_ref().and_then(MetaValue::as_bool) {
+            Some(true) => write!(f, "?")?,
+            Some(false) => (),
+            None => write!(f, "?{}", self.nullable)?,
+        }
+
+        // Variation.
+        match &self.variation {
+            Some(Some(variation)) => write!(f, "[{}]", variation)?,
+            Some(None) => (),
+            None => write!(f, "[?]")?,
+        }
+
+        // Parameter pack.
+        if self.class.has_parameters() {
+            if let Some(parameters) = &self.parameters {
+                write!(f, "<")?;
+                let mut first = true;
+                for parameter in parameters.iter() {
+                    if first {
+                        first = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{parameter}")?;
+                }
+                write!(f, ">")?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl DataTypePattern {
+    /// Bind all metavariable references in this pattern to the given context.
+    pub fn bind(&mut self, context: &mut Context) {
+        self.nullable.bind(context);
+        if let Some(parameters) = &mut self.parameters {
+            for parameter in parameters.iter_mut() {
+                parameter.value.bind(context);
+            }
+        }
+    }
+
+    /// Add constraints to all referenced metavariables based on the pattern:
+    ///  - the metavariable used to specify nullability must be a boolean;
+    ///  - metavariables used in the parameter pack must satisfy the
+    ///    constraints imposed by the class;
+    ///  - if the parameter pack has the wrong number of parameters for the
+    ///    class, Err is returned;
+    ///  - if a parameter has a name and the class does not support this or
+    ///    vice versa, Err is returned.
+    pub fn apply_static_constraints(&self) -> diagnostic::Result<()> {
+        todo!();
+    }
+
+    /// Returns whether the given concrete type matches this pattern. Parameter
+    /// names are ignored in the comparison.
+    pub fn matches(&self, concrete: &Arc<data_type::DataType>) -> bool {
+        // Check class.
+        if &self.class != concrete.class() {
+            return false;
+        }
+
+        // Check nullability.
+        if let Some(nullable) = self.nullable.value().as_ref().and_then(MetaValue::as_bool) {
+            if nullable != concrete.nullable() {
+                return false;
+            }
+        }
+
+        // Check variation.
+        if let Some(variation) = &self.variation {
+            if variation != concrete.variation() {
+                return false;
+            }
+        }
+
+        // Check parameter pack.
+        if let Some(parameters) = &self.parameters {
+            let concrete_parameters = concrete.parameters();
+            if parameters.len() != concrete_parameters.len() {
+                return false;
+            }
+            if parameters.iter().zip(concrete_parameters.iter()).any(|(x, y)| !x.matches(y)) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    /// Add constraints to all referenced parameters based on the given
+    /// concrete type (effectively forcing the values of the metavariables)
+    /// and copy the variation from the pattern.
+    pub fn apply_match_constraints(&mut self, concrete: &Arc<data_type::DataType>) -> diagnostic::Result<()> {
+        todo!();
+    }
+
+    /// Checks whether this pattern covers another, i.e. all types that
+    /// match other also match this.
+    pub fn covers(&self, other: &DataTypePattern) -> bool {
+        todo!()
+    }
+
+    /// Returns the concrete type associated with this pattern, if it is a
+    /// concrete type. An error is contained in the option if this is a
+    /// concrete type but the type could not be constructed because it is
+    /// invalid.
+    pub fn make_concrete(&self) -> Option<diagnostic::Result<Arc<data_type::DataType>>> {
+        todo!();
+    }
+}
+
+/// A parameter within a data type parameter pack.
+/// 
+/// Printed/parsed as:
+/// 
+///  - `name: value` for named parameters;
+///  - `value` for non-named parameters.
+#[derive(Clone, Debug)]
+pub struct DataTypeParameter {
+    /// Name of this parameter, if applicable (currently used only for
+    /// NSTRUCT).
+    pub name: Option<String>,
+
+    /// The metavariable representing the value of this parameter.
+    pub value: MetaVariableReference,
+}
+
+impl std::fmt::Display for DataTypeParameter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(name) = &self.name {
+            write!(f, "{}: ", string_util::as_ident_or_string(name))?;
+        }
+        write!(f, "{}", self.value)
+    }
+}
+
+impl DataTypeParameter {
+    /// Returns whether the given parameter value matches one of the remaining
+    /// possible values for value. The parameter name is not checked.
+    pub fn matches(&self, parameter: &data_type::Parameter) -> bool {
+        match parameter {
+            data_type::Parameter::Type(_) => todo!(),
+            data_type::Parameter::NamedType(_, _) => todo!(),
+            data_type::Parameter::Unsigned(_) => todo!(),
         }
     }
 }
 
-/// A reference to a metavariable. The context maps this to a description, a
-/// set of constraints, and a set of (additional) aliases for that
-/// metavariable.
+/// Hashable type that, when constructed via Default, guarantees that no other
+/// value of this type in the program is equal to the new value. Can however
+/// be copied after constructions, to make multiple aliases to the same unique
+/// value.
+#[derive(Clone, Debug, Eq)]
+pub struct Unique(Rc<()>);
+
+impl Default for Unique {
+    fn default() -> Self {
+        Self(Rc::new(()))
+    }
+}
+
+impl PartialEq for Unique {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl std::hash::Hash for Unique {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        Rc::as_ptr(&self.0).hash(state);
+    }
+}
+
+/// An unresolved reference to a metavariable.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum MetaVariableReferenceKey {
     /// A generic metavariable, case-insensitively identified by a string in
     /// type expressions. The string is stored in lowercase here.
     Generic(String),
 
+    /// A reference to an inferred metavariable.
+    Inferred(Unique),
+
     /// The type of the parameter with the given zero-based index.
-    ParameterType(usize),
+    FunctionParameterType(usize),
 
     /// The return type.
-    ReturnType,
-
-    /// A inferred reference to a metavariable. Used for the (intermediate)
-    /// results of expressions and literals. The usize is used to guarantee
-    /// uniqueness, while the string is used as a human-readable description
-    /// of the reference.
-    Anonymous(usize),
+    FunctionReturnType,
 }
 
 impl std::fmt::Display for MetaVariableReferenceKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MetaVariableReferenceKey::Generic(s) => write!(f, "{}", s),
-            MetaVariableReferenceKey::ParameterType(i) => write!(f, "type of {} parameter", string_util::describe_nth(*i as u32)),
-            MetaVariableReferenceKey::ReturnType => write!(f, "return type"),
-            MetaVariableReferenceKey::Anonymous(_) => write!(f, "(anonymous)"),
+            MetaVariableReferenceKey::Generic(s) => write!(f, "{s}"),
+            MetaVariableReferenceKey::Inferred(_) => write!(f, "_"),
+            MetaVariableReferenceKey::FunctionParameterType(i) => write!(f, "type of {} parameter", string_util::describe_nth(*i as u32)),
+            MetaVariableReferenceKey::FunctionReturnType => write!(f, "return type"),
         }
     }
 }
 
-/// An opaque reference to a metavariable returned by the context.
+/// A reference to a metavariable.
 #[derive(Clone, Debug)]
 pub struct MetaVariableReference {
-    /// The key used to internally refer to the variable within the context.
+    /// The method through which the metavariable is referenced.
     key: MetaVariableReferenceKey,
 
-    /// Description, if a better one than just the string representation of the
-    /// key was known by the context.
+    /// The raw parsed string that the user used to refer to the metavariable,
+    /// if any. Used to keep track of the case/syntax convention that the user
+    /// used, in order to produce better diagnostic messages. bind() moves this
+    /// into the alias block.
     description: Option<Rc<String>>,
-}
 
-impl PartialEq for MetaVariableReference {
-    fn eq(&self, other: &Self) -> bool {
-        self.key == other.key
-    }
+    /// Reference to the alias block for this metavariable. Initialized via
+    /// bind().
+    alias: Option<MetaVariableAliasReference>,
 }
 
 impl std::fmt::Display for MetaVariableReference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(description) = &self.description {
-            write!(f, "{}", description)
-        } else {
-            write!(f, "{}", self.key)
-        }
-    }
-}
-
-/// A data type, which may or may not be concrete/completely specified.
-#[derive(Clone, Debug)]
-struct ParameterizedDataType {
-    /// Type class (simple, compound, or user-defined).
-    pub class: data_type::Class,
-
-    /// Nullability, if specified.
-    pub nullable: Option<Rc<MetaVariableReferenceKey>>,
-
-    /// Type variation, if any.
-    pub variation: data_type::Variation,
-
-    /// Type parameters for non-simple types. None is used to signify that both
-    /// the types and the number of parameters are unbound.
-    pub parameters: Option<Vec<MetaVariableReferenceKey>>,
-}
-
-/// A (builtin) function used to resolve type expressions.
-#[derive(Clone, Debug)]
-pub enum MetaFunction {
-    /// Error marker for unknown functions.
-    Unresolved(String),
-
-    /// Boolean inversion: !bool | not(bool) -> bool
-    Not,
-
-    /// Boolean and: bool and bool | and(bool, bool) -> bool
-    And,
-
-    /// Boolean or: bool or bool | or(bool, bool) -> bool
-    Or,
-
-    /// Integer negation: -int | negate(int) -> int
-    Neg,
-
-    /// Integer multiplication: int * int | multiply(int, int) -> int
-    Mul,
-
-    /// Integer division: int / int | divide(int, int) -> int
-    Div,
-
-    /// Integer addition: int + int | add(int, int) -> int
-    Add,
-
-    /// Integer subtraction: int - int | subtract(int, int) -> int
-    Sub,
-
-    /// Integer minimum: min(int, int) -> int
-    Min,
-
-    /// Integer maximum: max(int, int) -> int
-    Max,
-
-    /// Integer equality: int = int | equal(int, int) -> int
-    Eq,
-
-    /// Integer inequality: int != int -> bool
-    Ne,
-
-    /// Integer less than or equal: int <= int -> bool
-    Le,
-
-    /// Integer greater than or equal: int >= int -> bool
-    Ge,
-
-    /// Integer less than: int < int | less_than(int, int) -> bool
-    Lt,
-
-    /// Integer greater than: int > int | greater_than(int, int) -> bool
-    Gt,
-
-    /// Ternary: if bool then any1 else any1 | bool ? any1 : any1 -> any1
-    Ternary,
-    
-    /// Type comparison (lhs is an ancestor of or is equal to rhs):
-    /// covers(type, type) -> bool
-    Covers,
-
-    /// Takes no arguments. Resolves to true if any of the function arguments
-    /// passed to the function call being solved for is nullable, or to false
-    /// otherwise.
-    AnyParametersNullable,
-}
-
-/// A set of integers described by inclusive ranges.
-#[derive(Clone, Debug)]
-pub struct IntegerSet<V: Ord + Clone + num_traits::bounds::Bounded> {
-    /// The values for which set containment flips. For example, the flips
-    /// [1, 4, 5, 6, 7] represent the ranges [1, 4), [5, 6), [7, MAX].
-    flips: BTreeSet<V>,
-}
-
-impl<V: Ord + Clone + num_traits::bounds::Bounded> IntegerSet<V> {
-    /// Performs an arbitrary set operation by combining the given sets into a
-    /// single set using the given operation. Whether a value v is in the
-    /// resulting set is functionally determined as follows (though the
-    /// implementation is more efficient):
-    ///  - each input set is assigned a weight (the i32 associated with it);
-    ///  - for each value v, the weights if the input sets it is contained in
-    /// is summed;
-    ///  - v is in the resulting set iff contained(sum_of_weights).
-    fn arbitrary<F: Fn(i32) -> bool>(sets: &[(&IntegerSet<V>, i32)], contained: F) -> IntegerSet<V> {
-        todo!()
-    }
-}
-
-/// Combines the given sets of ranges of V into a single set of ranges of V
-/// using the given operation. Whether a value v is in the resulting set is
-/// functionally determined as follows (though the implementation is more
-/// efficient):
-///  - each input set is assigned a weight (the i32 associated with it);
-///  - for each value v, the weights if the input sets it is contained in is
-///    summed;
-///  - v is in the resulting set iff contained(sum_of_weights).
-/// 
-/// The sets are represented as sorted unique integers representing the values
-/// where set containment flips. For example, [1, 4, 5, 6, 7] represents
-/// [1, 4), [5, 6), [7, MAX].
-/// 
-/// Examples:
-///  - union/or: set_operation(&[(a, 1), (b, 1)], |w| w > 0)
-///  - difference: set_operation(&[(a, 1), (b, -1)], |w| w > 0)
-///  - intersection/and: set_operation(&[(a, 1), (b, 1)], |w| w > 1)
-///  - xor: set_operation(&[(a, 1), (b, 1)], |w| w & 1 == 1)
-///  - invert/not: set_operation(&[(a, 1)], |w| w == 0)
-///  - empty set: set_operation(&[], |w| w != 0)
-///  - complete set: set_operation(&[], |w| w == 0)
-fn set_operation<V, F>(sets: &[(&BTreeSet<V>, i32)], contained: F) -> BTreeSet<V>
-where
-    V: Ord + Clone + num_traits::bounds::Bounded,
-    F: Fn(i32) -> bool,
-{
-    // Make an iterator for each input set that yields
-    // (value, weight_delta) pairs. This allows us to merge the iterators
-    // together while accumulating the weights we encounter to get
-    // (value, weight) pairs.
-    let mut sets = sets.into_iter().map(|(set, weight)| {
-        let weight = *weight;
-        set.iter().enumerate().map(move |(i, v)| (v.clone(), if i & 1 == 1 { weight } else { -weight })).peekable()
-    }).collect::<Vec<_>>();
-
-    // The resulting set.
-    let mut result = BTreeSet::new();
-
-    // Whether the latest entry we pushed into result opens or closes a
-    // range.
-    let mut in_set = false;
-
-    // Weight accumulator.
-    let mut weight = 0;
-    
-    // Iterating over the merged input set iterators will only yield values
-    // where the weight (may) change. If none of the input sets include the
-    // minimum value of V and we would only iterate over them, that means
-    // we'd never have a change to include V::MIN, even if contained(0)
-    // yields true. This option is used to always check V::MIN as well.
-    let mut first = Some(V::min_value());
-
-    // Find the next value that we need to compute the weight for.
-    while let Some(value) = first.take().or_else(|| sets.iter_mut().filter_map(|s| s.peek().map(|(v, _)| v)).min().cloned()) {
-        // Take from all iterators that will return exactly value, and
-        // accumulate the weights associated with them.
-        weight += sets.iter_mut().filter_map(|s| s.next_if(|(v2, _)| v2 == &value).map(|(_, w)| w)).sum::<i32>();
-
-        // Determine whether the new weight corresponds to values that
-        // should be contained in the resulting set.
-        let new_in_set = contained(weight);
-
-        // If the set containment flips, push the value in the resulting
-        // set.
-        if new_in_set != in_set {
-            in_set = new_in_set;
-            assert!(result.insert(value));
-        }
-    }
-    result
-}
-
-
-/// The types of constraints that can be imposed on metavariables.
-#[derive(Clone, Debug)]
-pub enum ConstraintType {
-    /// The metatype of the associated metavariable must be one of these.
-    MetaTypeSet(HashSet<MetaType>),
-
-    /// The associated metavariable must be a data type within this set.
-    DataTypeSet(Vec<ParameterizedDataType>),
-
-    /// The associated metavariable must be an integer within one of the
-    /// specified inclusive ranges.
-    IntegerSet(IntegerSet<i64>),
-
-    /// A function. Once all variables that need to be known to evaluate the
-    /// function are known, the solver will replace this with an Exactly.
-    Function(MetaFunction, Vec<Rc<MetaVariableReferenceKey>>),
-
-    /// The associated metavariable must have exactly this metavalue.
-    Exactly(MetaValue),
-}
-
-/// A constraint on a metavariable.
-#[derive(Clone, Debug)]
-pub struct Constraint {
-    /// The data for the constraint.
-    pub data: ConstraintType,
-
-    /// A human-readable reason for the existence of the constraint, used for
-    /// error messages when there are conflicting constraints.
-    pub reason: String,
-}
-
-/// A metavariable and its constraints.
-#[derive(Clone, Debug)]
-struct MetaVariable {
-    /// The aliases for this metavariable. For example, in fn(T) -> T, the
-    /// return type, the first parameter, and generic T all refer to the same
-    /// MetaVariable.
-    pub aliases: Vec<MetaVariableReferenceKey>,
-
-    /// The constraints on the value of this metavariable.
-    pub constraints: Vec<Constraint>,
-}
-
-impl MetaVariable {
-    /// Returns Some(value) if and only if this metavariable maps to a single
-    /// value.
-    pub fn get_value(&self) -> Option<&MetaValue> {
-        if self.constraints.len() == 1 {
-            if let ConstraintType::Exactly(value) = &self.constraints[0].data {
-                return Some(value);
+        // Try to print the description from the alias block.
+        if let Some(alias) = &self.alias {
+            if let Ok(alias) = alias.try_borrow() {
+                return write!(f, "{alias}");
             }
         }
-        None
+        
+        // If we aren't bound to an alias block yet, or if we can't borrow
+        // to access the description, see if we have a description of our own.
+        if let Some(s) =  &self.description {
+            return write!(f, "{s}");
+        }
+
+        // Fall back to the generated description of the key.
+        self.key.fmt(f)
     }
 }
 
-/// Metavariable constraint solver context.
+impl MetaVariableReference {
+    /// Creates an (unbound) named reference to a metavariable.
+    pub fn new_generic<S: ToString>(name: S) -> Self {
+        let name = name.to_string();
+        let key = name.to_ascii_lowercase();
+        MetaVariableReference {
+            key: MetaVariableReferenceKey::Generic(key),
+            description: Some(Rc::new(name)),
+            alias: None,
+        }
+    }
+
+    /// Creates a reference to a new, unique metavariable. The reference can be
+    /// copied to refer to the same metavariable multiple times.
+    pub fn new_inferred<S: ToString>(description: Option<S>) -> Self {
+        MetaVariableReference {
+            key: MetaVariableReferenceKey::Inferred(Unique::default()),
+            description: description.map(|x| Rc::new(x.to_string())),
+            alias: None,
+        }
+    }
+
+    /// Creates a reference to the type of the index'th parameter of the
+    /// function being solved for.
+    pub fn new_function_parameter_type(index: usize) -> Self {
+        MetaVariableReference {
+            key: MetaVariableReferenceKey::FunctionParameterType(index),
+            description: None,
+            alias: None,
+        }
+    }
+
+    /// Creates a reference to the return type of the function being solved
+    /// for.
+    pub fn new_function_return_type() -> Self {
+        MetaVariableReference {
+            key: MetaVariableReferenceKey::FunctionReturnType,
+            description: None,
+            alias: None,
+        }
+    }
+
+    /// Bind this metavariable reference to the given context.
+    pub fn bind(&mut self, context: &mut Context) {
+        todo!()
+    }
+
+    /// Adds an equality constraint between this metavariable and the other
+    /// metavariable. This essentially just merges their data blocks. Both
+    /// references must have been bound.
+    pub fn constrain_equal(&self, other: &MetaVariableReference) {
+        let a_alias = self.alias.as_ref().expect("attempt to constrain unbound metavariable reference");
+        let b_alias = other.alias.as_ref().expect("attempt to constrain unbound metavariable reference");
+
+        // If the references are equivalent, their values are already equal by
+        // definition.
+        if Rc::ptr_eq(&a_alias, &b_alias) {
+            return;
+        }
+
+        // Borrow the alias blocks.
+        let a_alias = a_alias.borrow();
+        let b_alias = b_alias.borrow();
+
+        // If the references refer to the same data block already, their
+        // values are already equal by definition.
+        if Rc::ptr_eq(&a_alias.data, &b_alias.data) {
+            return;
+        }
+
+        // Borrow the data blocks mutably. We first clone the Rc so we can drop
+        // the alias borrows; we need to do this, because we're about to borrow
+        // them mutably to re-alias them to the combined data block.
+        let a_data_ref = a_alias.data.clone();
+        let b_data_ref = b_alias.data.clone();
+        let mut a_data = a_data_ref.borrow_mut();
+        let mut b_data = b_data_ref.borrow_mut();
+
+        // Drop the borrows to the alias blocks.
+        drop(a_alias);
+        drop(b_alias);
+
+        // Copy stuff from the data block for b to the data block for a, such
+        // that a becomes the combined data block for both. Remap aliases to
+        // block b to block a instead, dropping expired weak references while
+        // we're at it.
+        a_data.aliases.extend(b_data.aliases.drain(..).filter(|x| {
+            x.upgrade().map(|x| x.borrow_mut().data = a_data_ref.clone()).is_some()
+        }));
+        a_data.constraints.extend(b_data.constraints.drain(..));
+
+        // Reset the possible values for a. This ensures that when the
+        // combined data block is updated later, the update call indicates that
+        // solving progress was made.
+        a_data.reset();
+    }
+
+    /// Constrains the value of the referred variable. The constraint is only
+    /// added if no equivalent constraint exists yet.
+    pub fn constrain(&self, constraint: Constraint) {
+        let alias = self.alias.as_ref().expect("attempt to constrain unbound metavariable reference").borrow();
+        let mut data = alias.data.borrow_mut();
+        if !data.constraints.iter().any(|x| x == &constraint) {
+            data.constraints.push(constraint);
+        }
+    }
+
+    /// If the set of possible values for this metavariable has been reduced to
+    /// only one possibility, return it. Otherwise returns None.
+    pub fn value(&self) -> Option<MetaValue> {
+        self.alias.as_ref().and_then(|alias| {
+            let alias = alias.borrow();
+            let data = alias.data.borrow();
+            data.values.value()
+        })
+    }
+
+    /// Returns whether this metavalue still has the given value as a
+    /// possibility.
+    pub fn matches(&self, value: &MetaValue) -> bool {
+        if let Some(alias) = &self.alias {
+            let alias = alias.borrow();
+            let data = alias.data.borrow();
+            data.values.contains(value)
+        } else {
+            true
+        }
+    }
+}
+
+/// Reference to a metavariable alias block.
+type MetaVariableAliasReference = Rc<RefCell<MetaVariableAlias>>;
+
+/// Weak reference to a metavariable alias block.
+type MetaVariableAliasWeakReference = std::rc::Weak<RefCell<MetaVariableAlias>>;
+
+/// An alias block for a metavariable. A (MetaVariableReferenceKey, Context)
+/// pair map to exactly one alias instance.
+#[derive(Clone, Debug)]
+struct MetaVariableAlias {
+    /// The best description we have for referring to this metavariable in
+    /// diagnostics.
+    description: String,
+
+    /// Reference to the data block that holds the state of this variable.
+    /// Different references may be aliases to the same data block.
+    data: MetaVariableDataBlockReference,
+}
+
+impl std::fmt::Display for MetaVariableAlias {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.description)
+    }
+}
+
+impl MetaVariableAlias {
+    
+}
+
+/*
+/// Reference to the data block for a metavariable, holding its constraints
+/// and remaining possible values.
+type MetaVariableDataBlockReference = Rc<RefCell<MetaVariableDataBlock>>;
+
+/// A data block for a metavariable. This holds the set of constraints imposed
+/// on the variable, and caches the possible values that the variable may still
+/// have.
+#[derive(Clone, Debug)]
+struct MetaVariableDataBlock {
+    /// Weak references to all aliases that refer to this data block. For
+    /// example, in fn(T) -> T, the return type, the first parameter, and
+    /// generic T all refer to the same data block.
+    aliases: Vec<MetaVariableAliasWeakReference>,
+
+    /// The constraints on the value of this metavariable.
+    constraints: Vec<Constraint>,
+
+    /// The possible values remaining for this metavariable. Updated using
+    /// update().
+    values: MetaValueSet,
+}
+
+impl MetaVariableDataBlock {
+    /// Resets the cached set of possible values remaining for this
+    /// metavariable.
+    pub fn reset(&mut self) {
+        todo!();
+    }
+
+    /// Updates values based on constraints. Returns whether progress was made
+    /// by excluding options that were previously allowed. Throws an error if
+    /// the value is overconstrained (i.e. no options remain).
+    pub fn update(&mut self) -> diagnostic::Result<bool> {
+        todo!();
+    }
+}
+*/
+
+/// Reference to a context.
+pub type ContextReference = Rc<RefCell<Context>>;
+
 #[derive(Clone, Debug)]
 pub struct Context {
-    /// The variables that we're solving for.
-    variables: HashMap<usize, MetaVariable>,
-
-    /// Maps references to indices in the variables HashMap.
-    reference_map: HashMap<MetaVariableReferenceKey, usize>,
-
-    /// Maps references to human-readable descriptions, insofar that a better
-    /// description than just the generated string representation of the
-    /// reference key is available.
-    descriptions: HashMap<MetaVariableReferenceKey, Rc<String>>,
-
-    /// Counter for generating unique variable indices.
-    variable_counter: usize,
-
-    /// Counter for generating unique anonymous reference indices.
-    anonymous_reference_counter: usize,
+    // TODO
 }
 
 impl Context {
-    /// Makes a reference to a new, unique metavariable.
-    pub fn anonymous<S: ToString>(&mut self, description: S) -> MetaVariableReference {
-        let index = self.anonymous_reference_counter;
-        self.anonymous_reference_counter += 1;
-        let key = MetaVariableReferenceKey::Anonymous(index);
-        let description = Rc::new(description.to_string());
-        self.descriptions.insert(key.clone(), description.clone());
-        MetaVariableReference {
-            key,
-            description: Some(description)
-        }
-    }
+    // TODO
+}
 
-    /// Makes a reference to the given generic.
-    pub fn generic<S: ToString>(&mut self, identifier: S) -> MetaVariableReference {
-        let identifier = identifier.to_string();
-        
-        // Parameters are matched case-insensitively, so we use the identifier
-        // in lowercase for the key. However, we use the user's case convention
-        // for the description. If the user is inconsistent in their case, the
-        // case of the first instance is used.
-        let identifier_lower = identifier.to_ascii_lowercase();
-        let key = MetaVariableReferenceKey::Generic(identifier_lower);
+#[derive(Clone, Debug, PartialEq)]
+pub struct Constraint {
+    // TODO
+}
 
-        let description = self.descriptions.entry(key.clone()).or_insert_with(|| Rc::new(identifier)).clone();
-        MetaVariableReference {
-            key,
-            description: Some(description)
-        }
-    }
+#[derive(Clone, Debug)]
+pub struct MetaValueSet {
+    // TODO
+}
 
-    /// Makes a reference to the type of the parameter with the given index.
-    pub fn parameter_type(&self, index: usize) -> MetaVariableReference {
-        self.key_to_reference(&MetaVariableReferenceKey::ParameterType(index))
-    }
-
-    /// Makes a reference to the return type of the function.
-    pub fn return_type(&self) -> MetaVariableReference {
-        self.key_to_reference(&MetaVariableReferenceKey::ReturnType)
-    }
-
-    /// Resolves the description of the given reference key to form a complete
-    /// reference.
-    fn key_to_reference(&self, key: &MetaVariableReferenceKey) -> MetaVariableReference {
-        let description = self.descriptions.get(key).cloned();
-        MetaVariableReference { key: key.clone(), description }
-    }
-
-    /// Sets the description of the parameter types based on the parameter names.
-    pub fn set_parameter_names<S: std::fmt::Display>(&mut self, names: &[S]) {
-        for (index, name) in names.iter().enumerate() {
-            self.descriptions.insert(MetaVariableReferenceKey::ParameterType(index), Rc::new(format!("type of {}", name)));
-        }
-    }
-
-    /// Resolves a reference to its constraints.
-    pub fn resolve_reference(&mut self, reference: &MetaVariableReference) -> &[Constraint] {
-        &self.resolve_reference_key(&reference.key)[..]
-    }
-
-    /// Resolves a reference to its constraints.
-    fn resolve_reference_key(&mut self, reference: &MetaVariableReferenceKey) -> &mut Vec<Constraint> {
-        match self.reference_map.get(reference) {
-            Some(x) => &mut self.variables.get_mut(x).expect("missing variable, inconsistent context").constraints,
-            None => {
-                let index = self.variable_counter;
-                self.variable_counter += 1;
-                self.reference_map.insert(reference.clone(), index);
-                &mut self.variables.entry(index).or_insert_with(|| MetaVariable {
-                    aliases: vec![reference.clone()],
-                    constraints: vec![],
-                }).constraints
-            }
-        }
-    }
-
-    /// Impose the given constraint on the given variable. If the variable
-    /// doesn't exist yet, it is created.
-    pub fn constrain(&mut self, reference: &MetaVariableReference, constraint: Constraint) {
-        self.constrain_key(&reference.key, constraint);
-    }
-
-    /// Impose the given constraint on the given variable. If the variable
-    /// doesn't exist yet, it is created.
-    fn constrain_key(&mut self, reference: &MetaVariableReferenceKey, constraint: Constraint) {
-        self.resolve_reference_key(reference).push(constraint);
-    }
-
-    /// Assert that the given two metavariables must have the same value.
-    pub fn equate(&mut self, a: &MetaVariableReference, b: &MetaVariableReference) {
-        self.equate_key(&a.key, &b.key);
-    }
-
-    /// Assert that the given two metavariables must have the same value.
-    fn equate_key(&mut self, a: &MetaVariableReferenceKey, b: &MetaVariableReferenceKey) {
-        // This constraint is always met if the references are equal.
-        if a == b {
-            return;
-        }
-        match (self.reference_map.get(a).cloned(), self.reference_map.get(b).cloned()) {
-            (Some(av), Some(bv)) => {
-                // The constraint is always met if both references already
-                // refer to the same variable.
-                if av == bv {
-                    return;
-                }
-                
-                // Remove b from the variable list. It will be merged into a.
-                let source = self.variables.remove(&bv).expect("missing variable, inconsistent context");
-
-                // Re-alias all aliases for b to a.
-                for alias in source.aliases.iter() {
-                    self.reference_map.insert(alias.clone(), av);
-                }
-
-                // Constrain a by whatever the constraints on b were.
-                self.variables.get_mut(&av).expect("missing variable, inconsistent context").constraints.extend(source.constraints);
-            }
-            (Some(av), None) => {
-                // No variable exist for b yet, so we just have to alias b to a.
-                self.variables.get_mut(&av).expect("missing variable, inconsistent context").aliases.push(b.clone());
-                self.reference_map.insert(b.clone(), av);
-            }
-            (None, Some(bv)) => {
-                // No variable exist for a yet, so we just have to alias a to b.
-                self.variables.get_mut(&bv).expect("missing variable, inconsistent context").aliases.push(a.clone());
-                self.reference_map.insert(a.clone(), bv);
-            }
-            (None, None) => {
-                // No variable exist for either yet, so we need to make one.
-                let v = self.variable_counter;
-                self.variable_counter += 1;
-                self.variables.insert(v, MetaVariable {
-                    aliases: vec![a.clone(), b.clone()],
-                    constraints: vec![],
-                });
-                self.reference_map.insert(a.clone(), v);
-                self.reference_map.insert(b.clone(), v);
-            }
-        }
-    }
-
-    /// Copy the constraints on source to dest, without asserting that source
-    /// and dest are exactly equal.
-    pub fn copy_constraints(&mut self, source: &MetaVariableReference, dest: &MetaVariableReference) {
-        self.copy_constraints_key(&source.key, &dest.key);
-    }
-
-    /// Copy the constraints on source to dest, without asserting that source
-    /// and dest are exactly equal.
-    fn copy_constraints_key(&mut self, source: &MetaVariableReferenceKey, dest: &MetaVariableReferenceKey) {
-        let constraints = self.resolve_reference_key(source).clone();
-        self.resolve_reference_key(dest).extend(constraints);
-    }
-
-    /// Attempts to reduce the given set of constraints. Returns Err if the
-    /// given set of constraints is overconstrained, Ok(None) if no reduction
-    /// could be performed, or Ok(Some(constraints)) if the constraint set
-    /// was successfully reduced.
-    fn reduce(&mut self, constraints: Vec<Constraint>) -> diagnostic::Result<Option<Vec<Constraint>>> {
-        /*let mut new_constraints_a;
-        let mut new_constraints_b;
-        let mut reduced = false;
-        for new in constraints {
-            let mut new = Some(new);
-            for old in new_constraints_a.drain(..) {
-                match (old, new) {
-
-                }
-            }
-        }
-
-        Ok(if reduced {
-            Some(new_constraints)
-        } else {
-            None
-        })*/
+impl MetaValueSet {
+    /// If this set contains exactly one value, return it.
+    pub fn value(&self) -> Option<MetaValue> {
         todo!()
     }
 
-    /// Solve constraints until all metavariables are resolved to a single
-    /// value.
-    pub fn solve(&mut self, allow_underconstrained: bool) -> diagnostic::Result<()> {
-        /*
-        // Add constraints to variables based on how they are used. First of
-        // all, function parameter and return types must be data types.
-        for variable in self.variables.values_mut() {
-            if variable.aliases.iter().any(|x| matches!(x, MetaVariableReferenceKey::ParameterType(_) | MetaVariableReferenceKey::ReturnType)) {
-                variable.constraints.push(Constraint {
-                    data: ConstraintType::MetaTypeSet(vec![MetaType::DataType]),
-                    reason: String::from("function parameter/return types must be data types"),
-                })
-            }
-        }
-
-
-        // Attempt to solve the constraints iteratively.
-        loop {
-
-            // For each iteration, loop over all variables and reduce their
-            // constraints one by one. Terminate if we stop making progress,
-            // or once all constraints were reduced to a single Exactly.
-            // Note that we need to make a copy of the indices because
-            // variables could be added or removed by the solving process.
-            let mut made_progress = false;
-            let indices = self.variables.keys().collect::<Vec<_>>();
-            for index in indices.into_iter() {
-                if let Some(constraints) = self.variables.get(index).map(|x| x.constraints.clone()) {
-                    if let Some(constraints) = self.reduce(constraints)? {
-                        made_progress = true;
-                        self.variables.get_mut(index).expect("variable removed while reducing").constraints = constraints;
-                    }
-                }
-            }
-
-            // Terminate if we failed to reduce the set of possible metavalues
-            // for any metavariable.
-            if !made_progress {
-                break;
-            }
-        }
-
-        // Return an underconstrained error if the constraints for any variable
-        // were not reduced to a single Exactly, unless allow_underconstrained
-        // was passed.
-        if !allow_underconstrained {
-            for variable in self.variables.values() {
-                if variable.get_value().is_none() {
-                    // TODO: better error message here... Describe the variable
-                    // that failed to solve and its remaining options.
-                    return Err(cause!(TypeUnderconstrained, "failed to solve"));
-                }
-            }
-        }
-        Ok(())
-        */
+    /// Returns whether the set contains the given value.
+    pub fn contains(&self, value: &MetaValue) -> bool {
         todo!()
     }
 }
 
-/// The types of function parameters.
+
 #[derive(Clone, Debug)]
-pub enum FunctionParameterType {
-    /// Used for value arguments. The type of said value argument is
-    /// constrained using a metavariable.
-    Value,
-
-    /// Used for type arguments. The type is constrained using a
-    /// metavariable.
-    Type,
-
-    /// Used for required enumerations.
-    RequiredEnum(Vec<String>),
-
-    /// Used for optional enumerations.
-    OptionalEnum(Vec<String>),
+pub struct MetaValue {
+    // TODO
 }
 
-/// A function parameter.
-#[derive(Clone, Debug)]
-pub struct FunctionParameter {
-    /// The user-specified name of the argument.
-    name: String,
+impl MetaValue {
+    /// If this is a boolean metavalue, return the value.
+    pub fn as_bool(&self) -> Option<bool> {
+        todo!()
+    }
 
-    /// The type of the argument.
-    argument_type: FunctionParameterType,
+    /// If this is an integer metavalue, return the value.
+    pub fn as_integer(&self) -> Option<i64> {
+        todo!()
+    }
+
+    /// If this is a data type pattern metavalue, return the data type pattern.
+    pub fn as_data_type_pattern(&self) -> Option<&DataTypePattern> {
+        todo!()
+    }
+
+    /// If this is a data type pattern metavalue that maps to a single,
+    /// concrete data type, return it.
+    pub fn as_concrete_data_type(&self) -> Option<diagnostic::Result<Arc<data_type::DataType>>> {
+        self.as_data_type_pattern().and_then(|x| x.make_concrete())
+    }
 }
-
-/// The variadic behavior of the last argument of a function.
-#[derive(Clone, Copy, Debug)]
-pub enum FunctionVariadicity {
-    /// The last argument in the prototype can match up to this many
-    /// *additional* value arguments of the exact same type. Effectively, the
-    /// metavariables representing the types of the additional arguments are
-    /// treated as aliases for the type of the argument specified in the
-    /// prototype. This variant is also used for functions that aren't
-    /// varadic.
-    Consistent,
-
-    /// The last argument in the prototype can match up to this many
-    /// *additional* value arguments, that need not be the exact same type.
-    /// Effectively, the metavariables representing the types of the additional
-    /// arguments are cloned (along with their constraints, if any) from the
-    /// argument specified in the prototype.
-    Inconsistent,
-}
-
-/// The prototype of a function.
-#[derive(Clone, Debug)]
-pub struct FunctionPrototype {
-    /// The initial context that the solvers for particular usages of this
-    /// function are derived from. This includes all the constraints specified
-    /// in the prototype, but is free from constraints imposed by any usage of
-    /// the function.
-    pub context: Context,
-
-    /// The number of specified arguments and their argument types.
-    pub parameters: FunctionParameter,
-
-    /// Maximum number of additional arguments that may be passed, derived from
-    /// the last parameter by means of variadicity. This is simply set to zero
-    /// for functions that are not variadic, or to usize::MAX for functions
-    /// with no limit on the number of arguments.
-    pub max_additional_arguments: usize,
-
-    /// How the contraints on the additional arguments are derived.
-    pub variadicity: FunctionVariadicity,
-}
-

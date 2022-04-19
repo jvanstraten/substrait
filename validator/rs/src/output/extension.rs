@@ -5,7 +5,7 @@
 use crate::output::data_type;
 use crate::output::path;
 use crate::output::tree;
-use crate::string_util;
+use crate::util;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -33,7 +33,7 @@ impl Eq for NamedReference {}
 impl std::fmt::Display for NamedReference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(name) = &self.name {
-            write!(f, "{}", string_util::as_ident_or_string(name))
+            write!(f, "{}", util::string::as_ident_or_string(name))
         } else {
             write!(f, "?")
         }
