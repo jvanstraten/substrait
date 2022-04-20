@@ -296,7 +296,7 @@ where
     }
 }
 
-impl<V> IntegerSet<V> 
+impl<V> IntegerSet<V>
 where
     V: Ord + Clone + num_traits::bounds::Bounded
 {

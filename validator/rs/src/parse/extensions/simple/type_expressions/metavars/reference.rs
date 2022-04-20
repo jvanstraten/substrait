@@ -163,4 +163,60 @@ impl Reference {
             true
         }
     }
+
+    /// Returns true when both references refer to the same data block due to
+    /// an equality constraint or due to being the same reference.
+    pub fn aliases(&self, other: &Reference) -> bool {
+        let a_alias = self.alias.as_ref().expect("attempt to constrain unbound metavariable reference");
+        let b_alias = other.alias.as_ref().expect("attempt to constrain unbound metavariable reference");
+        if Rc::ptr_eq(&a_alias, &b_alias) {
+            return true;
+        }
+        if Rc::ptr_eq(&a_alias.borrow().data, &b_alias.borrow().data) {
+            return true;
+        }
+        return false;
+    }
+
+    /// Returns whether this metavariable can be proven to have the same value
+    /// as the other metavariable. This is true if both references alias the
+    /// same variable, or if the values for both variables were resolved and
+    /// these values are equal.
+    pub fn value_equals(&self, other: &Reference) -> bool {
+        if self.aliases(other) {
+            return true;
+        }
+        if let Some(self_value) = self.value() {
+            if let Some(other_value) = other.value() {
+                return self_value == other_value;
+            }
+        }
+        return false;
+    }
+
+    /// Returns whether the value of this metavariable can be proven to either
+    /// cover or not cover the value of the other metavariable, where
+    /// "a covers b" means that all possible values of b are also possible
+    /// values of a. If this cannot yet be proven, None is returned. This
+    /// happens when:
+    /// 
+    ///  - self currently covers other, but new constraints may still be added
+    ///    to self; or
+    ///  - self currently does not cover other, but they do have at least one
+    ///    possible value in common, and new constraints may still be added to
+    ///    remove possibile values from other.
+    pub fn covers(&self, other: &Reference) -> Option<bool> {
+        // A value always covers itself, so if both references alias the same
+        // value, covers will always return true, no matter which constraints
+        // are added.
+        if self.aliases(other) {
+            return Some(true);
+        }
+        
+        let a_alias = self.alias.as_ref().expect("attempt to constrain unbound metavariable reference").borrow();
+        let b_alias = other.alias.as_ref().expect("attempt to constrain unbound metavariable reference").borrow();
+        let a_data = a_alias.data.borrow();
+        let b_data = b_alias.data.borrow();
+        a_data.covers(b_data)
+    }
 }

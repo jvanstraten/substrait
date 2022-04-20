@@ -115,12 +115,12 @@ where
     }
 
     /// Computes the difference between this set and the given other set.
-    pub fn difference(&self, other: &IntegerSet<V>) -> IntegerSet<V> {
+    pub fn subtract(&self, other: &IntegerSet<V>) -> IntegerSet<V> {
         Self::arbitrary(&[(self, 1), (other, -1)], |x| x > 0)
     }
 
     /// Computes the intersection between this set and the given other set.
-    pub fn intersection(&self, other: &IntegerSet<V>) -> IntegerSet<V> {
+    pub fn intersect(&self, other: &IntegerSet<V>) -> IntegerSet<V> {
         Self::arbitrary(&[(self, 1), (other, 1)], |x| x > 1)
     }
 }

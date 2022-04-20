@@ -16,7 +16,7 @@ pub enum Type {
 }
 
 /// A metavalue, i.e. a fully-specified value of a metatype.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     /// A boolean.
     Boolean(bool),

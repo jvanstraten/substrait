@@ -498,7 +498,6 @@ impl MetaVariableAlias {
     
 }
 
-/*
 /// Reference to the data block for a metavariable, holding its constraints
 /// and remaining possible values.
 type MetaVariableDataBlockReference = Rc<RefCell<MetaVariableDataBlock>>;
@@ -535,7 +534,7 @@ impl MetaVariableDataBlock {
         todo!();
     }
 }
-*/
+
 
 /// Reference to a context.
 pub type ContextReference = Rc<RefCell<Context>>;

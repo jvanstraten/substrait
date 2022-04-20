@@ -23,12 +23,22 @@ pub struct Data {
 
     /// Whether changes have been made to this data block since the last poll.
     updated: bool,
+
+    /// Set when it shouldn't be possible for this value to be further
+    /// constrained. If this is set, merge_with() will always panic, and
+    /// constrain() will panic if a constraint is added that isn't already
+    /// in the list. This flag is necessary to determine when solving is
+    /// complete, and for determining when covers() can start returning a
+    /// value.
+    complete: bool,
 }
 
 impl Data {
     /// Merges this data block with the other data block. All references to
     /// the other data block will be redirected to this data block.
     pub fn merge_with(&mut self, other: &Reference) {
+        assert!(!self.complete);
+        assert!(!other.complete);
         let other_data = other.borrow_mut();
 
         // Copy stuff from the data block for b to the data block for a, such
@@ -47,9 +57,13 @@ impl Data {
     /// equivalent constraint exists yet.
     pub fn constrain(&mut self, constraint: constraints::constraint::Constraint) -> diagnostic::Result<()> {
         if !self.constraints.iter().any(|x| x == &constraint) {
+            assert!(!self.complete);
             self.values.constrain(&constraint);
             self.constraints.push(constraint);
             if self.values.is_empty() {
+                // Determine a minimal subset of constraints that
+                // overconstrains the variable (which must include at least the
+                // new constraint) and generate an error message from that.
                 todo!()
             }
             self.updated = true;
@@ -69,6 +83,37 @@ impl Data {
         self.values.contains(value)
     }
 
+    /// Returns whether the value of this metavariable can be proven to either
+    /// cover or not cover the value of the other metavariable, where
+    /// "a covers b" means that all possible values of b are also possible
+    /// values of a. If this cannot yet be proven, None is returned. This
+    /// happens when:
+    /// 
+    ///  - self currently covers other, but new constraints may still be added
+    ///    to self; or
+    ///  - self currently does not cover other, but they do have at least one
+    ///    possible value in common, and new constraints may still be added to
+    ///    remove possibile values from other.
+    pub fn covers(&self, other: &Data) -> Option<bool> {
+        match self.values.superset_of(other.values) {
+            Some(true) => {
+                if self.complete {
+                    Some(true)
+                } else {
+                    None
+                }
+            }
+            Some(false) => {
+                if other.complete || !self.values.intersects_with(other.values) {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            None => None,
+        }
+    }
+
     /// Returns whether there were any updates to the constraints on this
     /// metavariable since the last check.
     pub fn check_updates(&mut self) -> bool {
@@ -78,6 +123,18 @@ impl Data {
         } else {
             false
         }
+    }
+
+    /// Marks this variable as being fully constrained, i.e. no further
+    /// constraints will be imposed. Any covers() function evaluation that
+    /// relies on this fact may start returning a value.
+    pub fn mark_complete(&mut self) {
+        self.complete = true;
+    }
+
+    /// Returns whether this value has been completely constrained.
+    pub fn is_complete(&self) -> bool {
+        self.complete
     }
 }
 

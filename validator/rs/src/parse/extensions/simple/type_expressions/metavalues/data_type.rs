@@ -26,11 +26,11 @@ pub struct Pattern {
     pub class: data_type::Class,
 
     /// Nullability. Must map to a boolean metavariable.
-    ///  - generic -> printed/parsed as `class?generic`.
-    ///  - anonymous -> printed/parsed as `class?_123`.
-    ///  - resolved to true -> printed/parsed as `class?`.
-    ///  - resolved to false -> printed/parsed as `class`.
-    pub nullable: metavars::reference::Reference,
+    ///  - None -> printed/parsed as `class??`.
+    ///  - Some(metavar) -> printed/parsed as `class?metavar`.
+    ///  - Some(resolved to true) -> printed/parsed as `class?`.
+    ///  - Some(resolved to false) -> printed/parsed as `class`.
+    pub nullable: Option<metavars::reference::Reference>,
 
     /// Type variation, if specified. Note that data_type::Variation is itself
     /// an option:
@@ -59,10 +59,14 @@ impl std::fmt::Display for Pattern {
         write!(f, "{}", self.class)?;
 
         // Nullable flag.
-        match self.nullable.value().as_ref().and_then(metavalues::value::Value::as_boolean) {
-            Some(true) => write!(f, "?")?,
-            Some(false) => (),
-            None => write!(f, "?{}", self.nullable)?,
+        if let Some(nullable) = &self.nullable {
+            match nullable.value().as_ref().and_then(metavalues::value::Value::as_boolean) {
+                Some(true) => write!(f, "?")?,
+                Some(false) => (),
+                None => write!(f, "?{}", nullable)?,
+            }
+        } else {
+            write!(f, "??")?;
         }
 
         // Variation.
@@ -96,7 +100,9 @@ impl std::fmt::Display for Pattern {
 impl Pattern {
     /// Bind all metavariable references in this pattern to the given context.
     pub fn bind(&mut self, context: &mut Context) {
-        self.nullable.bind(context);
+        if let Some(nullable) = &self.nullable {
+            self.nullable.bind(context);
+        }
         if let Some(parameters) = &mut self.parameters {
             for parameter in parameters.iter_mut() {
                 parameter.value.bind(context);
@@ -125,7 +131,7 @@ impl Pattern {
         }
 
         // Check nullability.
-        if let Some(nullable) = self.nullable.value().as_ref().and_then(metavalues::value::Value::as_boolean) {
+        if let Some(nullable) = self.nullable.as_ref().and_then(|x| x.value().as_ref()).and_then(metavalues::value::Value::as_boolean) {
             if nullable != concrete.nullable() {
                 return false;
             }
@@ -160,9 +166,56 @@ impl Pattern {
     }
 
     /// Checks whether this pattern covers another, i.e. all types that
-    /// match other also match this.
-    pub fn covers(&self, other: &Pattern) -> bool {
-        todo!()
+    /// match other also match this. This will only yield a result if all
+    /// metavariables involved are sufficiently constrained; i.e., further
+    /// constraining the possible values of metavariables will not affect
+    /// the output once Some(_) is returned.
+    pub fn covers(&self, other: &Pattern) -> Option<bool> {
+        // Check class.
+        if self.class != other.class {
+            return Some(false);
+        }
+
+        // Check nullability.
+        if let Some(self_nullable) = &self.nullable {
+            if let Some(other_nullable) = &other.nullable {
+                let covers = self_nullable.covers(other_nullable);
+                if covers != Some(true) {
+                    return covers;
+                }
+            } else {
+                return Some(false);
+            }
+        }
+
+        // Check variation.
+        if let Some(self_variation) = &self.variation {
+            if let Some(other_variation) = &other.variation {
+                if self_variation != other_variation {
+                    return Some(false);
+                }
+            } else {
+                return Some(false);
+            }
+        }
+
+        // Check parameter pack.
+        if let Some(self_parameters) = &self.parameters {
+            if let Some(other_parameters) = &other.parameters {
+                if self_parameters.len() != other_parameters.len() {
+                    return false;
+                }
+                for covers in self_parameters.iter().zip(other_parameters.iter()).map(|(a, b)| a.value.covers(&b.value)) {
+                    if covers != Some(true) {
+                        return covers;
+                    }
+                }
+            } else {
+                return Some(false);
+            }
+        }
+
+        return Some(true);
     }
 
     /// Returns the concrete type associated with this pattern, if it is a
