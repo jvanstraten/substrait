@@ -1,6 +1,6 @@
 use crate::parse::extensions::simple::type_expressions::metavars;
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 /// An alias block for a metavariable. A (MetaVariableReferenceKey, Context)
 /// pair map to exactly one alias instance.

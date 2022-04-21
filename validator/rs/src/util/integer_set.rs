@@ -13,7 +13,7 @@ pub struct IntegerSet<V: Ord + Clone + num_traits::bounds::Bounded> {
 
 impl<V> std::fmt::Display for IntegerSet<V>
 where
-    V: Ord + Clone + num_traits::bounds::Bounded + std::fmt::Display
+    V: Ord + Clone + num_traits::bounds::Bounded + std::fmt::Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut first = true;
@@ -39,9 +39,13 @@ where
     }
 }
 
-impl<V> IntegerSet<V> 
+impl<V> IntegerSet<V>
 where
-    V: Ord + Clone + num_traits::bounds::Bounded + std::ops::Add<Output = V> + num_traits::identities::One
+    V: Ord
+        + Clone
+        + num_traits::bounds::Bounded
+        + std::ops::Add<Output = V>
+        + num_traits::identities::One,
 {
     /// Returns an integer set containing only the given value.
     pub fn new_single(value: V) -> Self {
@@ -50,13 +54,15 @@ where
                 vec![value.clone(), value + V::one()]
             } else {
                 vec![value]
-            }
+            },
         }
     }
 
     /// If this set contains a single value, this returns it.
     pub fn value(&self) -> Option<V> {
-        if (self.flips.len() == 1 && self.flips[0] == V::max_value()) || (self.flips.len() == 2 && self.flips[1] == self.flips[0] + V::one()) {
+        if (self.flips.len() == 1 && self.flips[0] == V::max_value())
+            || (self.flips.len() == 2 && self.flips[1] == self.flips[0].clone() + V::one())
+        {
             Some(self.flips[0].clone())
         } else {
             None
@@ -66,7 +72,7 @@ where
 
 impl<V> IntegerSet<V>
 where
-    V: Ord + Clone + num_traits::bounds::Bounded
+    V: Ord + Clone + num_traits::bounds::Bounded,
 {
     /// Returns an empty integer set.
     pub fn new() -> Self {
@@ -75,7 +81,9 @@ where
 
     /// Returns a full integer set.
     pub fn new_full() -> Self {
-        IntegerSet { flips: vec![V::min_value()] }
+        IntegerSet {
+            flips: vec![V::min_value()],
+        }
     }
 
     /// Returns whether the given value is contained in the set.
@@ -103,8 +111,14 @@ where
     ///  - for each value v, the weights if the input sets it is contained in
     /// is summed;
     ///  - v is in the resulting set iff operation(sum_of_weights) yields true.
-    pub fn arbitrary<F: Fn(i32) -> bool>(sets: &[(&IntegerSet<V>, i32)], operation: F) -> IntegerSet<V> {
-        let sets = sets.iter().map(|(s, w)| (&s.flips[..], *w)).collect::<Vec<_>>();
+    pub fn arbitrary<F: Fn(i32) -> bool>(
+        sets: &[(&IntegerSet<V>, i32)],
+        operation: F,
+    ) -> IntegerSet<V> {
+        let sets = sets
+            .iter()
+            .map(|(s, w)| (&s.flips[..], *w))
+            .collect::<Vec<_>>();
         let flips = set_operation(&sets, operation);
         IntegerSet { flips }
     }
@@ -127,7 +141,7 @@ where
 
 impl<V> From<std::ops::Range<V>> for IntegerSet<V>
 where
-    V: Ord + Clone + num_traits::bounds::Bounded
+    V: Ord + Clone + num_traits::bounds::Bounded,
 {
     fn from(range: std::ops::Range<V>) -> Self {
         IntegerSet {
@@ -135,14 +149,18 @@ where
                 vec![range.start, range.end]
             } else {
                 vec![]
-            }
+            },
         }
     }
 }
 
-impl<V> From<std::ops::RangeInclusive<V>> for IntegerSet<V> 
+impl<V> From<std::ops::RangeInclusive<V>> for IntegerSet<V>
 where
-    V: Ord + Clone + num_traits::bounds::Bounded + std::ops::Add<Output = V> + num_traits::identities::One
+    V: Ord
+        + Clone
+        + num_traits::bounds::Bounded
+        + std::ops::Add<Output = V>
+        + num_traits::identities::One,
 {
     fn from(range: std::ops::RangeInclusive<V>) -> Self {
         IntegerSet {
@@ -150,23 +168,25 @@ where
                 vec![range.start().clone(), range.end().clone() + V::one()]
             } else {
                 vec![range.start().clone()]
-            }
+            },
         }
     }
 }
 
 impl<V> From<std::ops::RangeFrom<V>> for IntegerSet<V>
 where
-    V: Ord + Clone + num_traits::bounds::Bounded
+    V: Ord + Clone + num_traits::bounds::Bounded,
 {
     fn from(range: std::ops::RangeFrom<V>) -> Self {
-        IntegerSet { flips: vec![range.start] }
+        IntegerSet {
+            flips: vec![range.start],
+        }
     }
 }
 
 impl<V> From<std::ops::RangeTo<V>> for IntegerSet<V>
 where
-    V: Ord + Clone + num_traits::bounds::Bounded
+    V: Ord + Clone + num_traits::bounds::Bounded,
 {
     fn from(range: std::ops::RangeTo<V>) -> Self {
         IntegerSet {
@@ -174,14 +194,18 @@ where
                 vec![V::min_value(), range.end]
             } else {
                 vec![]
-            }
+            },
         }
     }
 }
 
-impl<V> From<std::ops::RangeToInclusive<V>> for IntegerSet<V> 
+impl<V> From<std::ops::RangeToInclusive<V>> for IntegerSet<V>
 where
-    V: Ord + Clone + num_traits::bounds::Bounded + std::ops::Add<Output = V> + num_traits::identities::One
+    V: Ord
+        + Clone
+        + num_traits::bounds::Bounded
+        + std::ops::Add<Output = V>
+        + num_traits::identities::One,
 {
     fn from(range: std::ops::RangeToInclusive<V>) -> Self {
         IntegerSet {
@@ -189,20 +213,21 @@ where
                 vec![V::min_value(), range.end + V::one()]
             } else {
                 vec![V::min_value()]
-            }
+            },
         }
     }
 }
 
-impl<V> From<std::ops::RangeFull> for IntegerSet<V> 
+impl<V> From<std::ops::RangeFull> for IntegerSet<V>
 where
-    V: Ord + Clone + num_traits::bounds::Bounded
+    V: Ord + Clone + num_traits::bounds::Bounded,
 {
     fn from(range: std::ops::RangeFull) -> Self {
-        IntegerSet { flips: vec![V::min_value()] }
+        IntegerSet {
+            flips: vec![V::min_value()],
+        }
     }
 }
-
 
 /// Combines the given sets of ranges of V into a single set of ranges of V
 /// using the given operation. Whether a value v is in the resulting set is
@@ -212,12 +237,12 @@ where
 ///  - for each value v, the weights if the input sets it is contained in is
 ///    summed;
 ///  - v is in the resulting set iff operation(sum_of_weights).
-/// 
+///
 /// The sets are represented as sorted unique integers representing the values
 /// where set containment flips. For example, [1, 4, 5, 6, 7] represents
 /// [1, 4), [5, 6), [7, MAX]. All values must be unique and must be stored in
 /// ascending order.
-/// 
+///
 /// Examples:
 ///  - union/or: set_operation(&[(a, 1), (b, 1)], |w| w > 0)
 ///  - difference: set_operation(&[(a, 1), (b, -1)], |w| w > 0)
@@ -235,10 +260,16 @@ where
     // (value, weight_delta) pairs. This allows us to merge the iterators
     // together while accumulating the weights we encounter to get
     // (value, weight) pairs.
-    let mut sets = sets.into_iter().map(|(set, weight)| {
-        let weight = *weight;
-        set.iter().enumerate().map(move |(i, v)| (v.clone(), if i & 1 == 1 { weight } else { -weight })).peekable()
-    }).collect::<Vec<_>>();
+    let mut sets = sets
+        .into_iter()
+        .map(|(set, weight)| {
+            let weight = *weight;
+            set.iter()
+                .enumerate()
+                .map(move |(i, v)| (v.clone(), if i & 1 == 1 { weight } else { -weight }))
+                .peekable()
+        })
+        .collect::<Vec<_>>();
 
     // The resulting set.
     let mut result = vec![];
@@ -249,7 +280,7 @@ where
 
     // Weight accumulator.
     let mut weight = 0;
-    
+
     // Iterating over the merged input set iterators will only yield values
     // where the weight (may) change. If none of the input sets include the
     // minimum value of V and we would only iterate over them, that means
@@ -258,10 +289,18 @@ where
     let mut first = Some(V::min_value());
 
     // Find the next value that we need to compute the weight for.
-    while let Some(value) = first.take().or_else(|| sets.iter_mut().filter_map(|s| s.peek().map(|(v, _)| v)).min().cloned()) {
+    while let Some(value) = first.take().or_else(|| {
+        sets.iter_mut()
+            .filter_map(|s| s.peek().map(|(v, _)| v))
+            .min()
+            .cloned()
+    }) {
         // Take from all iterators that will return exactly value, and
         // accumulate the weights associated with them.
-        weight += sets.iter_mut().filter_map(|s| s.next_if(|(v2, _)| v2 == &value).map(|(_, w)| w)).sum::<i32>();
+        weight += sets
+            .iter_mut()
+            .filter_map(|s| s.next_if(|(v2, _)| v2 == &value).map(|(_, w)| w))
+            .sum::<i32>();
 
         // Determine whether the new weight corresponds to values that
         // should be contained in the resulting set.

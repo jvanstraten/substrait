@@ -1,23 +1,24 @@
 use crate::output::data_type;
 use crate::output::data_type::ParameterInfo;
 use crate::output::diagnostic;
-use crate::util;
-use crate::parse::extensions::simple::type_expressions::metavars;
+use crate::parse::extensions::simple::type_expressions::context;
 use crate::parse::extensions::simple::type_expressions::metavalues;
+use crate::parse::extensions::simple::type_expressions::metavars;
+use crate::util;
 use std::sync::Arc;
 
 /// A pattern that matches some set of data types.
-/// 
+///
 /// Types are printed/parsed in the following order:
-/// 
+///
 ///  - class;
 ///  - nullability;
 ///  - variation;
 ///  - parameter pack.
-/// 
+///
 /// Intentionally convoluted example: `struct?x[?]<>` matches any variation of
 /// an empty struct with nullability `x`.
-/// 
+///
 /// When a data type pattern is successfully matched against a concrete type,
 /// this may impose constraints on metavariables referenced in the pattern.
 #[derive(Clone, Debug, PartialEq)]
@@ -49,8 +50,10 @@ pub struct Pattern {
     ///    even if class requires parameters.
     ///  - Some([]) -> parameters are specified to be an empty list.
     ///    Printed/parsed as `class<>`
-    ///  - Some([a, b, c]) -> printed/parsed as `class<a, b, c>`.
-    pub parameters: Option<Vec<Parameter>>,
+    ///  - Some([Some(a), Some(b), Some(c)]) -> printed/parsed as
+    ///    `class<a, b, c>`.
+    ///  - Some([Some(a), None]) -> printed as `class<a, ?>`.
+    pub parameters: Option<Vec<Option<Parameter>>>,
 }
 
 impl std::fmt::Display for Pattern {
@@ -60,10 +63,18 @@ impl std::fmt::Display for Pattern {
 
         // Nullable flag.
         if let Some(nullable) = &self.nullable {
-            match nullable.value().as_ref().and_then(metavalues::value::Value::as_boolean) {
-                Some(true) => write!(f, "?")?,
-                Some(false) => (),
-                None => write!(f, "?{}", nullable)?,
+            match nullable.value() {
+                Ok(value) => {
+                    match value
+                        .as_ref()
+                        .and_then(metavalues::value::Value::as_boolean)
+                    {
+                        Some(true) => write!(f, "?")?,
+                        Some(false) => (),
+                        None => write!(f, "?{}", nullable)?,
+                    }
+                }
+                Err(_) => write!(f, "!")?,
             }
         } else {
             write!(f, "??")?;
@@ -87,7 +98,11 @@ impl std::fmt::Display for Pattern {
                     } else {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{parameter}")?;
+                    if let Some(parameter) = parameter {
+                        write!(f, "{parameter}")?;
+                    } else {
+                        write!(f, "?")?;
+                    }
                 }
                 write!(f, ">")?;
             }
@@ -99,48 +114,44 @@ impl std::fmt::Display for Pattern {
 
 impl Pattern {
     /// Bind all metavariable references in this pattern to the given context.
-    pub fn bind(&mut self, context: &mut Context) {
+    pub fn bind(&self, context: &mut context::solver::Solver) {
         if let Some(nullable) = &self.nullable {
-            self.nullable.bind(context);
+            nullable.bind(context);
         }
-        if let Some(parameters) = &mut self.parameters {
-            for parameter in parameters.iter_mut() {
-                parameter.value.bind(context);
+        if let Some(parameters) = &self.parameters {
+            for parameter in parameters.iter() {
+                if let Some(parameter) = parameter {
+                    parameter.value.bind(context);
+                }
             }
         }
     }
 
-    /// Add constraints to all referenced metavariables based on the pattern:
-    ///  - the metavariable used to specify nullability must be a boolean;
-    ///  - metavariables used in the parameter pack must satisfy the
-    ///    constraints imposed by the class;
-    ///  - if the parameter pack has the wrong number of parameters for the
-    ///    class, Err is returned;
-    ///  - if a parameter has a name and the class does not support this or
-    ///    vice versa, Err is returned.
-    pub fn apply_static_constraints(&self) -> diagnostic::Result<()> {
-        todo!();
-    }
-
     /// Returns whether the given concrete type matches this pattern. Parameter
     /// names are ignored in the comparison.
-    pub fn matches(&self, concrete: &Arc<data_type::DataType>) -> bool {
+    pub fn matches(&self, concrete: &Arc<data_type::DataType>) -> diagnostic::Result<bool> {
         // Check class.
         if &self.class != concrete.class() {
-            return false;
+            return Ok(false);
         }
 
         // Check nullability.
-        if let Some(nullable) = self.nullable.as_ref().and_then(|x| x.value().as_ref()).and_then(metavalues::value::Value::as_boolean) {
-            if nullable != concrete.nullable() {
-                return false;
+        if let Some(nullable) = &self.nullable {
+            if let Some(nullable) = nullable
+                .value()?
+                .as_ref()
+                .and_then(metavalues::value::Value::as_boolean)
+            {
+                if nullable != concrete.nullable() {
+                    return Ok(false);
+                }
             }
         }
 
         // Check variation.
         if let Some(variation) = &self.variation {
             if variation != concrete.variation() {
-                return false;
+                return Ok(false);
             }
         }
 
@@ -148,21 +159,18 @@ impl Pattern {
         if let Some(parameters) = &self.parameters {
             let concrete_parameters = concrete.parameters();
             if parameters.len() != concrete_parameters.len() {
-                return false;
+                return Ok(false);
             }
-            if parameters.iter().zip(concrete_parameters.iter()).any(|(x, y)| !x.matches(y)) {
-                return false;
+            for (x, y) in parameters.iter().zip(concrete_parameters.iter()) {
+                if let Some(x) = x {
+                    if !x.matches(y) {
+                        return Ok(false);
+                    }
+                }
             }
         }
-        
-        return true;
-    }
 
-    /// Add constraints to all referenced parameters based on the given
-    /// concrete type (effectively forcing the values of the metavariables)
-    /// and copy the variation from the pattern.
-    pub fn apply_match_constraints(&mut self, concrete: &Arc<data_type::DataType>) -> diagnostic::Result<()> {
-        todo!();
+        Ok(true)
     }
 
     /// Checks whether this pattern covers another, i.e. all types that
@@ -170,21 +178,21 @@ impl Pattern {
     /// metavariables involved are sufficiently constrained; i.e., further
     /// constraining the possible values of metavariables will not affect
     /// the output once Some(_) is returned.
-    pub fn covers(&self, other: &Pattern) -> Option<bool> {
+    pub fn covers(&self, other: &Pattern) -> diagnostic::Result<Option<bool>> {
         // Check class.
         if self.class != other.class {
-            return Some(false);
+            return Ok(Some(false));
         }
 
         // Check nullability.
         if let Some(self_nullable) = &self.nullable {
             if let Some(other_nullable) = &other.nullable {
                 let covers = self_nullable.covers(other_nullable);
-                if covers != Some(true) {
+                if covers != Ok(Some(true)) {
                     return covers;
                 }
             } else {
-                return Some(false);
+                return Ok(Some(false));
             }
         }
 
@@ -192,10 +200,10 @@ impl Pattern {
         if let Some(self_variation) = &self.variation {
             if let Some(other_variation) = &other.variation {
                 if self_variation != other_variation {
-                    return Some(false);
+                    return Ok(Some(false));
                 }
             } else {
-                return Some(false);
+                return Ok(Some(false));
             }
         }
 
@@ -203,34 +211,246 @@ impl Pattern {
         if let Some(self_parameters) = &self.parameters {
             if let Some(other_parameters) = &other.parameters {
                 if self_parameters.len() != other_parameters.len() {
-                    return false;
+                    return Ok(Some(false));
                 }
-                for covers in self_parameters.iter().zip(other_parameters.iter()).map(|(a, b)| a.value.covers(&b.value)) {
-                    if covers != Some(true) {
-                        return covers;
+                for (self_parameter, other_parameter) in
+                    self_parameters.iter().zip(other_parameters.iter())
+                {
+                    if let Some(self_parameter) = self_parameter {
+                        if let Some(other_parameter) = other_parameter {
+                            let covers = self_parameter.value.covers(&other_parameter.value);
+                            if covers != Ok(Some(true)) {
+                                return covers;
+                            }
+                        } else {
+                            return Ok(Some(false));
+                        }
                     }
                 }
             } else {
-                return Some(false);
+                return Ok(Some(false));
             }
         }
 
-        return Some(true);
+        Ok(Some(true))
+    }
+
+    /// Checks whether this pattern has at least one concrete type in common
+    /// with the other pattern.
+    pub fn intersects_with(&self, other: &Pattern) -> diagnostic::Result<bool> {
+        // Check class.
+        if self.class != other.class {
+            return Ok(false);
+        }
+
+        // Check nullability.
+        if let Some(self_nullable) = &self.nullable {
+            if let Some(other_nullable) = &other.nullable {
+                if !self_nullable.intersects_with(other_nullable)? {
+                    return Ok(false);
+                }
+            }
+        }
+
+        // Check variation.
+        if let Some(self_variation) = &self.variation {
+            if let Some(other_variation) = &other.variation {
+                if self_variation != other_variation {
+                    return Ok(false);
+                }
+            }
+        }
+
+        // Check parameter pack.
+        if let Some(self_parameters) = &self.parameters {
+            if let Some(other_parameters) = &other.parameters {
+                if self_parameters.len() != other_parameters.len() {
+                    return Ok(false);
+                }
+                for (a, b) in self_parameters.iter().zip(other_parameters.iter()) {
+                    if let Some(a) = a {
+                        if let Some(b) = b {
+                            if !a.value.intersects_with(&b.value)? {
+                                return Ok(false);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(true)
+    }
+
+    /// Computes the intersection between this pattern and the other pattern.
+    /// If this intersection cannot be represented with one pattern without
+    /// creating a new metavariable, a superset is returned by leaving the
+    /// position of that metavariable black. If there is no intersection, None
+    /// is returned.
+    pub fn intersect(&self, other: &Pattern) -> diagnostic::Result<Option<Pattern>> {
+        // Check class.
+        if self.class != other.class {
+            return Ok(None);
+        }
+        let class = self.class.clone();
+
+        // Check nullability.
+        let nullable = match (&self.nullable, &other.nullable) {
+            (None, None) => None,
+            (None, Some(x)) => Some(x.clone()),
+            (Some(x), None) => Some(x.clone()),
+            (Some(x), Some(y)) => {
+                if x.value_equals(y)? {
+                    Some(x.clone())
+                } else if x.intersects_with(y)? {
+                    // Intersects, but cannot be represented!
+                    None
+                } else {
+                    return Ok(None);
+                }
+            }
+        };
+
+        // Check variation.
+        let variation = match (&self.variation, &other.variation) {
+            (None, None) => None,
+            (None, Some(x)) => Some(x.clone()),
+            (Some(x), None) => Some(x.clone()),
+            (Some(x), Some(y)) => {
+                if x == y {
+                    Some(x.clone())
+                } else {
+                    return Ok(None);
+                }
+            }
+        };
+
+        // Check parameter pack.
+        let parameters = match (&self.parameters, &other.parameters) {
+            (None, None) => None,
+            (None, Some(x)) => Some(x.clone()),
+            (Some(x), None) => Some(x.clone()),
+            (Some(x), Some(y)) => {
+                if x.len() == y.len() {
+                    let mut parameters = Vec::with_capacity(x.len());
+                    for (a, b) in x.iter().zip(y.iter()) {
+                        parameters.push(match (a, b) {
+                            (None, None) => None,
+                            (None, Some(x)) => Some(x.clone()),
+                            (Some(x), None) => Some(x.clone()),
+                            (Some(x), Some(y)) => {
+                                if x.value.value_equals(&y.value)? {
+                                    Some(x.clone())
+                                } else if x.value.intersects_with(&y.value)? {
+                                    // Intersects, but cannot be represented!
+                                    None
+                                } else {
+                                    return Ok(None);
+                                }
+                            }
+                        });
+                    }
+                    Some(parameters)
+                } else {
+                    return Ok(None);
+                }
+            }
+        };
+
+        Ok(Some(Pattern {
+            class,
+            nullable,
+            variation,
+            parameters,
+        }))
+    }
+
+    /// Computes the union of this pattern and the other pattern. If this union
+    /// cannot be represented with a single pattern, a superset is returned.
+    /// None is used to represent the set of all types.
+    pub fn union(&self, other: &Pattern) -> diagnostic::Result<Option<Pattern>> {
+        // Check class.
+        if self.class != other.class {
+            // The class is required in a pattern, so expand to all types.
+            return Ok(None);
+        }
+        let class = self.class.clone();
+
+        // Check nullability.
+        let nullable = match (&self.nullable, &other.nullable) {
+            (Some(x), Some(y)) => {
+                if x.value_equals(y)? {
+                    Some(x.clone())
+                } else {
+                    // Multiple values possible, expand to accept all values.
+                    None
+                }
+            }
+            (_, _) => None,
+        };
+
+        // Check variation.
+        let variation = match (&self.variation, &other.variation) {
+            (Some(x), Some(y)) => {
+                if x == y {
+                    Some(x.clone())
+                } else {
+                    // Multiple variations possible, expand to accept all
+                    // variations.
+                    None
+                }
+            }
+            (_, _) => None,
+        };
+
+        // Check parameter pack.
+        let parameters = match (&self.parameters, &other.parameters) {
+            (Some(x), Some(y)) => {
+                if x.len() == y.len() {
+                    let mut parameters = Vec::with_capacity(x.len());
+                    for (a, b) in x.iter().zip(y.iter()) {
+                        parameters.push(match (a, b) {
+                            (Some(x), Some(y)) => {
+                                if x.value.value_equals(&y.value)? {
+                                    Some(x.clone())
+                                } else {
+                                    // Multiple values possible, expand to
+                                    // accept all values.
+                                    None
+                                }
+                            }
+                            (_, _) => None,
+                        });
+                    }
+                    Some(parameters)
+                } else {
+                    // Multiple parameter counts possible, expand to accept all
+                    // parameter packs.
+                    None
+                }
+            }
+            (_, _) => None,
+        };
+
+        Ok(Some(Pattern {
+            class,
+            nullable,
+            variation,
+            parameters,
+        }))
     }
 
     /// Returns the concrete type associated with this pattern, if it is a
-    /// concrete type. An error is contained in the option if this is a
-    /// concrete type but the type could not be constructed because it is
-    /// invalid.
-    pub fn make_concrete(&self) -> Option<diagnostic::Result<Arc<data_type::DataType>>> {
+    /// concrete type.
+    pub fn make_concrete(&self) -> diagnostic::Result<Option<Arc<data_type::DataType>>> {
         todo!();
     }
 }
 
 /// A parameter within a data type parameter pack.
-/// 
+///
 /// Printed/parsed as:
-/// 
+///
 ///  - `name: value` for named parameters;
 ///  - `value` for non-named parameters.
 #[derive(Clone, Debug)]

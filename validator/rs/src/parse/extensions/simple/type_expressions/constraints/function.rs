@@ -54,7 +54,7 @@ pub enum Function {
 
     /// Ternary: if bool then any1 else any1 | bool ? any1 : any1 -> any1
     Ternary,
-    
+
     /// Type comparison (lhs is an ancestor of or is equal to rhs):
     /// covers(type, type) -> bool
     Covers,

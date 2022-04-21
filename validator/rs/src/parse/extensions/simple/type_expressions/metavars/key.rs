@@ -48,7 +48,11 @@ impl std::fmt::Display for Key {
         match self {
             Key::Generic(s) => write!(f, "{s}"),
             Key::Inferred(_) => write!(f, "_"),
-            Key::FunctionParameterType(i) => write!(f, "type of {} parameter", util::string::describe_nth(*i as u32)),
+            Key::FunctionParameterType(i) => write!(
+                f,
+                "type of {} parameter",
+                util::string::describe_nth(*i as u32)
+            ),
             Key::FunctionReturnType => write!(f, "return type"),
         }
     }

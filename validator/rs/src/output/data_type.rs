@@ -473,7 +473,7 @@ pub trait ParameterInfo {
 }
 
 /// Type class.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Class {
     /// Well-known simple type.
     Simple(Simple),
@@ -556,7 +556,7 @@ impl Class {
 }
 
 /// Enumeration of simple types defined by Substrait.
-#[derive(Clone, Debug, PartialEq, Display, EnumString)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Display, EnumString)]
 #[strum(ascii_case_insensitive, serialize_all = "snake_case")]
 pub enum Simple {
     Boolean,
@@ -578,7 +578,7 @@ pub enum Simple {
 }
 
 /// Enumeration of compound types defined by Substrait.
-#[derive(Clone, Debug, PartialEq, Display, EnumString)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Display, EnumString)]
 #[strum(ascii_case_insensitive, serialize_all = "UPPERCASE")]
 pub enum Compound {
     FixedChar,
