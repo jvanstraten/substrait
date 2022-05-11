@@ -1,0 +1,557 @@
+(**
+ * This grammar specifies the language used to describe function overload
+ * parameter patterns and the type expressions used to derive the return
+ * type in simple extension YAML files.
+ *
+ * Notes on how to interpret this grammar:
+ *
+ *  - This grammar assumes that the input has been lowercased before it is
+ *    parsed, as the grammar is case-insensitive and this keeps it at least
+ *    somewhat clean.
+ *  - Some rules in this grammar are ambiguous. Ambiguity must be resolved
+ *    by applying the first rule that matches, and by matching ?*+ lazily
+ *    where applicable (only relevant for block comments as defined here).
+ *    This can be accomplished using a recursive-descent parser.
+ *  - This grammar is overly strict w.r.t. required whitespace, supported
+ *    characters in comments, etc. Implementations may accept a superset of
+ *    this grammar, as long as all inputs that are matched by this grammar
+ *    are evaluated according to this specification.
+ *)
+
+
+(**** Toplevel rules ****)
+
+(**
+ * Toplevel rule for function parameter type patterns. The argument pack
+ * supplied to a function is matched against these parameter type patterns.
+ * Variables used in the patterns are assigned by unpacking argument types
+ * into them. If this would redefine a variable to a different value, the
+ * function overload does not match the supplied argument pack. Note that for
+ * any nullability handling methods other than `DISCRETE` the nullability check
+ * will be omitted, but the nullability of arguments can still be captured.
+ *)
+<param> ::= <on> <patt> <on>
+
+(**
+ * Toplevel rule for function return types. The statements are first evaluated
+ * sequentially, from top to bottom. If any error is encountered, the function
+ * overload is said to not match the argument pack for which the statements are
+ * evaluated. The final expression at the end is evaluated to determine the
+ * return type. Note that the computed nullability of the return type will be
+ * overridden if `MIRROR` is specified for nullability handling.
+ *)
+<return> ::= <on> <stmt>* <expr> <on>
+
+(**
+ * Statement.
+ *)
+<stmt>
+
+  (**
+   * Evaluates the RHS expression, then unpacks the result into the LHS
+   * pattern. An error must be thrown (implying that the function does not
+   * match the provided argument pack) if:
+   *  - the expression cannot be evaluated due to "?" operators, previously
+   *    undefined variables, or undefined components of type patterns;
+   *  - the result of the RHS expression does not match the pattern on the LHS;
+   *    or
+   *  - a new value would be unpacked into a previously defined variable on the
+   *    LHS, for which the value differs.
+   * Variables used in the LHS pattern are assigned by unpacking the result of
+   * the RHS expression.
+   *)
+  ::= <patt> <o> "=" <o> <expr> <n>
+
+  (**
+   * Asserts that the given expression yields true. An error must be thrown
+   * (implying that the function does not match the provided argument pack) if
+   * the expression yields anything else. This is useful in particular in
+   * conjunction with the "in" expression, to specify constraints.
+   *)
+    | "assert" <w> <expr> <n>
+
+
+(**** Expressions ****)
+
+(**
+ * An expression, that can be evaluated once all inputs it depends on are
+ * defined.
+ *)
+<expr>
+
+  (**
+   * Ternary conditional. The condition expression must yield a boolean. If
+   * true, the "then" expression is evaluated and returned. If false, the
+   * "else" expression is evaluated and returned.
+   *)
+  ::= "if" <w> <expr> <w> "then" <w> <expr> <w> "else" <w> <expr>
+
+  (**
+   * Evaluates the LHS expression, and then matches it against the entries
+   * in the set until one of the patterns matches. Any variables used within
+   * the matching pattern are defined by unpacking the expression into it, as
+   * if it were an assignment statement. If any pattern matches, true is
+   * returned, otherwise false is returned. Typically used in conjunction with
+   * "assert" statements.
+   *)
+    | <expr> <w> "in" <w> <set>
+
+  (**
+   * A boolean OR expression. Both the LHS and RHS must be booleans. The RHS
+   * is only evaluated if the LHS yielded false.
+   *)
+    | <expr1> <o> "||" <o> <expr>
+
+(* Next precedence level... *)
+    | <expr1>
+<expr1>
+
+  (**
+   * A boolean AND expression. Both the LHS and RHS must be booleans. The RHS
+   * is only evaluated if the LHS yielded true.
+   *)
+  ::= <expr2> <o> "&&" <o> <expr1>
+
+(* Next precedence level... *)
+    | <expr2>
+<expr2>
+
+  (**
+   * Equality test. A metatype mismatch between the LHS and RHS is an error.
+   *)
+  ::= <expr3> <o> "==" <o> <expr2>
+
+  (**
+   * Inequality test. A metatype mismatch between the LHS and RHS is an error.
+   *)
+    | <expr3> <o> "!=" <o> <expr2>
+
+(* Next precedence level... *)
+    | <expr3>
+<expr3>
+
+  (**
+   * Less-than test. The LHS and RHS must both be integers.
+   *)
+  ::= <expr4> <o> "<" <o> <expr3>
+
+  (**
+   * Less-than-or-equal test. The LHS and RHS must both be integers.
+   *)
+    | <expr4> <o> "<=" <o> <expr3>
+
+  (**
+   * Greater-than test. The LHS and RHS must both be integers.
+   *)
+    | <expr4> <o> ">" <o> <expr3>
+
+  (**
+   * Greater-than-or-equal test. The LHS and RHS must both be integers.
+   *)
+    | <expr4> <o> ">=" <o> <expr3>
+
+(* Next precedence level... *)
+    | <expr4>
+<expr4>
+
+  (**
+   * Integer addition. The LHS and RHS must both be integers. i64 overflow
+   * should throw an error.
+   *)
+  ::= <expr5> <o> "+" <o> <expr4>
+
+  (**
+   * Integer subtraction. The LHS and RHS must both be integers. i64 overflow
+   * should throw an error.
+   *)
+    | <expr5> <o> "-" <o> <expr4>
+
+(* Next precedence level... *)
+    | <expr5>
+<expr5>
+
+  (**
+   * Integer multiplication. The LHS and RHS must both be integers. i64 overflow
+   * should throw an error.
+   *)
+  ::= <expr6> <o> "*" <o> <expr5>
+
+  (**
+   * Integer division, rounding down to negative infinity (same convention as
+   * Python, NOT the same as C and friends). The LHS and RHS must both be
+   * integers. Division by zero should throw an error.
+   *)
+    | <expr6> <o> "/" <o> <expr5>
+
+  (**
+   * Integer remainder for the above definition of division (that is, the sign
+   * matches the divisor, not the divident). The LHS and RHS must both be
+   * integers. Division by zero should throw an error.
+   *)
+    | <expr6> <o> "%" <o> <expr5>
+
+(* Next precedence level... *)
+    | <expr6>
+<expr6>
+
+  (**
+   * Integer unity operator, to allow integer literals with explicit positive
+   * sign to be specified. The operand must be an integer.
+   *)
+  ::= "+" <o> <expr6>
+
+  (**
+   * Integer negation operator. The operand must be an integer. i64 overflow
+   * (for an input of -2^63) should throw an error.
+   *)
+    | "-" <o> <expr6>
+
+  (**
+   * Boolean NOT operator. The operand must be a boolean.
+   *)
+    | "!" <o> <expr6>
+
+  (**
+   * Alternative syntax for "in" expression.
+   *)
+    | "covers" <o> "(" <o> <expr> <o> "," <o> <set> <o> ")"
+
+  (**
+   * Built-in function evaluation. The built-in functions are:
+   *
+   *  - min(int, int) -> int: returns the lowest integer;
+   *  - max(int, int) -> int: returns the highest integer;
+   *
+   * and expressions also have a function form:
+   *
+   *  - if_else(bool, T, T) -> T: function form of ternary operator;
+   *  - or(bool, bool) -> bool: function form of || operator;
+   *  - and(bool, bool) -> bool: function form of && operator;
+   *  - equal(int, int) -> bool: function form of == operator;
+   *  - not_equal(int, int) -> bool: function form of != operator;
+   *  - greater_than(int, int) -> bool: function form of > operator;
+   *  - greater_equal(int, int) -> bool: function form of >= operator;
+   *  - less_than(int, int) -> int: function form of < operator; and
+   *  - less_equal(int, int) -> int: function form of <= operator.
+   *  - add(int, int) -> int: function form of + operator;
+   *  - subtract(int, int) -> int: function form of binary - operator;
+   *  - multiply(int, int) -> int: function form of * operator;
+   *  - divide(int, int) -> int: function form of / operator;
+   *  - remainder(int, int) -> int: function form of % operator;
+   *  - positive(int) -> int: function form of unary + operator;
+   *  - negate(int) -> int: function form of unary - operator;
+   *  - not(bool) -> bool: function form of ! operator;
+   *
+   * Note that all arguments of a function are evaluated before the function
+   * itself is evaluated, so if_else(), or() and and() differ from the
+   * expressions in terms of short-circuiting behavior.
+   *)
+    | <id> <o> "(" <o> <expr> (<o> "," <o> <expr>)* <o> ")"
+
+(* Next precedence level... *)
+    | <parexpr>
+<parexpr>
+
+  (**
+   * Parentheses for explicit precedence and escaping otherwise ambiguous
+   * syntax.
+   *)
+  ::= "(" <o> <expr> <o> ")"
+
+  (**
+   * Integer literal. Must be within 0..2^63-1. Negative integers are made
+   * using the unary "-" operator. There is no literal for -2^63, but this is
+   * unlikely to be needed in practice, since there are no bit manipulation
+   * functions. If needed, however, it can however be made using for example
+   * -9223372036854775807 - 1.
+   *)
+    | <int>
+
+  (**
+   * Boolean literal.
+   *)
+    | <bool>
+
+  (**
+   * Fully-specified patterns (i.e. previously defined variables and
+   * fully-specified types) may be used like a literal.
+   *)
+    | <patt>
+
+(**
+ * A pattern. Used to match types and unpack type parameters.
+ *)
+<patt>
+
+  (**
+   * When used as a pattern, this matches a data type. All expression rules
+   * matched within a pattern must also be valid patterns (no functions or
+   * operators must be used). When used in an expression, this must yield a
+   * fully-defined type, i.e. any variables used must have previously been
+   * defined, and "?" operators are not allowed.
+   *)
+  ::= <type>
+
+  (**
+   * Variable usage (when used within an expression) or definition (when
+   * used within a pattern). When used within an expression, the variable
+   * must have previously been assigned. When used within a pattern, the
+   * variable must either not have been assigned yet (it is then treated
+   * as a template within the pattern), or must have been assigned to the
+   * exact same value (it is treated as part of the pattern).
+   *)
+    | <id>
+
+  (**
+   * Operator that behaves like a variable that is never actually assigned,
+   * or, equivalently, it matches everything. May only be used in pattern
+   * context.
+   *)
+    | "?"
+
+(**
+ * A set of possible values, used by the "in" expression to define
+ * constraints.
+ *)
+<set>
+
+  (**
+   * Shorthand notation for a set consisting of a single element or integral
+   * range.
+   *)
+  ::= <setel>
+
+  (**
+   * A set consisting of one or more values. The elements are matched from
+   * left to right, and only the first matching element (if multiple match)
+   * is unpacked into variables.
+   *)
+    | "[" <o> <setel> (<o> "," <o> <setel>)* <o> "]"
+
+(**
+ * A set "element", either a single value, a single pattern, or a range of
+ * integers.
+ *)
+<setel>
+
+  (**
+   * A single value or pattern.
+   *)
+  ::= <expr>
+
+  (**
+   * An inclusive range of integers. If the LHS is greater than the RHS, the
+   * range does not match anything.
+   *)
+    | <expr> <o> ".." <o> <expr>
+
+
+(**** Type literals and patterns ****)
+
+(**
+ * A type pattern or literal.
+ *)
+<type> ::= <typeid> <o> <nullab> <o> <tvar> <o> <tparams>
+
+(**
+ * The base of a type, either a builtin type or a user-defined type. Note that
+ * the builtin types must be specified here verbatim, because otherwise this
+ * rule would conflict with variable usage.
+ *)
+<typeid>
+
+  (**
+   * Builtin simple types. <tparams> must be left unspecified.
+   *)
+  ::= "boolean"
+    | "i8"
+    | "i16"
+    | "i32"
+    | "i64"
+    | "fp32"
+    | "fp64"
+    | "string"
+    | "binary"
+    | "timestamp"
+    | "timestamp_tz"
+    | "date"
+    | "time"
+    | "interval_year"
+    | "interval_day"
+    | "uuid"
+
+  (**
+   * Builtin complex types. When <tparams> is left unspecified, types with any
+   * number of parameters are matched.
+   *)
+    | "fixedchar"
+    | "varchar"
+    | "fixedbinary"
+    | "varbinary"
+    | "decimal"
+    | "struct"
+    | "nstruct"
+    | "list"
+    | "map"
+
+  (**
+   * A user-defined type defined in the current simple extension. Since (at the
+   * time of writing) user-defined types cannot declare parameters, <tparams>
+   * must be left unspecified.
+   *)
+    | "u!" <id>
+
+  (**
+   * A user-defined type defined in another simple extension. The first
+   * identifier must match a namespace defined elsewhere in the YAML file,
+   * mapping it to the canonical URI of the extension (URI syntax would
+   * otherwise conflict with this grammar). Since (at the time of writing)
+   * user-defined types cannot declare parameters, <tparams> must be left
+   * unspecified.
+   *)
+    | "u!" <id> "." <id>
+
+(**
+ * The nullability of a type.
+ *)
+<nullab>
+
+  (**
+   * Nullability is specified: if the ? is specified then the type is nullable,
+   * otherwise it is required. When this type is used as a pattern for a
+   * function argument type, and the function's nullability handling method is
+   * set to anything other than `DISCRETE`, this is ignored.
+   *)
+  ::= "?"?
+
+  (**
+   * Nullability is captured into a variable or ignored in case of a pattern,
+   * or specified by means of a boolean expression. Note that ignored
+   * nullability will look like for example "i32??".
+   *)
+    | "?" <o> <parexpr>
+
+(**
+ * The variation of a type.
+ *)
+<tvar>
+
+  (**
+   * Use the specified variation (either defined in this extension or in the
+   * prefixed namespace, same logic as for base types) or the base variation
+   * if no variation is specified.
+   *)
+  ::= ("[" <o> (<id> ".")? <id> <o> "]")?
+
+  (**
+   * Match any variation. May only be used within a pattern.
+   *)
+    | "[" <o> "?" <o> "]"
+
+(**
+ * The parameter pack of a compound type. Note that "struct<>" means an empty
+ * struct, while just "struct" would match a struct with any number of fields.
+ *)
+<tparams> ::= ("<" <o> (<tparam> (<o> "," <o> <tparam>)* <o>)? ">")?
+
+(**
+ * A single type parameter.
+ *)
+<tparam>
+
+  (**
+   * Syntax for a named parameter. The name is semantically ignored; the syntax
+   * is allowed only for symmetry with the NSTRUCT pseudotype. For simplicity,
+   * implementations may choose to accept or reject named parameters outside the
+   * context of an NSTRUCT and anonymous parameters within the context of an
+   * NSTRUCT, rendering this merely a grammatical construct.
+   *)
+  ::= <id> <o> ":" <o> <expr>
+
+  (**
+   * Syntax for an anonymous/unnamed parameter.
+   *)
+    | <expr>
+
+
+(**** Simple literals and identifiers ****)
+
+(**
+ * Positive integer. Only base 10 is supported at this time.
+ *)
+<int> ::= [1-9] [0-9]*
+
+(**
+ * Boolean literals.
+ *)
+<bool> ::= "true" | "false"
+
+(**
+ * An arbitrary identifier for as far as parsing is concerned. Used for all
+ * kinds of things.
+ *)
+<id> ::= <id1> <id2>*
+
+(**
+ * Permissible initial characters of an identifier. Note that this grammar
+ * assumes that the input has been lowercased first for case insensitivity, so
+ * [A-Z] is implied.
+ *)
+<id1> ::= [a-z] | "_" | "$"
+
+(**
+ * Subsequent characters of an identifier.
+ *)
+<id2> ::= <id1> | [0-9]
+
+
+(**** Whitespace and comment management ****)
+
+(**
+ * A grammatically required newline.
+ *)
+<n> ::= <o> (<nl> <o>)+
+
+(**
+ * An optional newline.
+ *)
+<on> ::= <o> (<nl> <o>)*
+
+(**
+ * Grammatically required spacing.
+ *)
+<w> ::= <s>+
+
+(**
+ * Optional spacing.
+ *)
+<o> ::= <s>*
+
+(**
+ * A single newline, possibly including an end-of-line comment. Both # and //
+ * are allowed as start characters.
+ *)
+<nl> ::= (("//" | "#") <notnl>* )? "\n"
+
+(**
+ * A single space character or C-style block comment.
+ *)
+<s> ::= " " | "\t" | "/*" <any>* "*/"
+
+(**
+ * Any single character supported on the input.
+ *)
+<any> ::= <notnl> | "\n"
+
+(**
+ * Any single character supported on the input, except for a newline. This
+ * includes all characters that can be written using a US keyboard.
+ * Implementations may choose to accept more (or all) characters, but must
+ * accept at least this set.
+ *)
+<notnl>
+  ::= [a-z] | [0-9]
+    | " " | "`" | "~" | "!" | "@" | "#" | "$" | "%" | "\t"
+    | "^" | "&" | "*" | "(" | ")" | "-" | "_" | "=" | "\""
+    | "+" | "[" | "{" | "]" | "}" | "|" | ";" | ":" | "\\"
+    | "'" | "," | "<" | "." | ">" | "/" | "?"
