@@ -30,7 +30,7 @@
  * any nullability handling methods other than `DISCRETE` the nullability check
  * will be omitted, but the nullability of arguments can still be captured.
  *)
-<param> ::= <on> <patt> <on>
+<param> ::= <on> <patt> <on> ;
 
 (**
  * Toplevel rule for function return types. The statements are first evaluated
@@ -40,7 +40,7 @@
  * return type. Note that the computed nullability of the return type will be
  * overridden if `MIRROR` is specified for nullability handling.
  *)
-<return> ::= <on> <stmt>* <expr> <on>
+<return> ::= <on> <stmt>* <expr> <on> ;
 
 (**
  * Statement.
@@ -69,6 +69,7 @@
    * conjunction with the "in" expression, to specify constraints.
    *)
     | "assert" <w> <expr> <n>
+    ;
 
 
 (**** Expressions ****)
@@ -104,6 +105,7 @@
 
 (* Next precedence level... *)
     | <expr1>
+    ;
 <expr1>
 
   (**
@@ -114,6 +116,7 @@
 
 (* Next precedence level... *)
     | <expr2>
+    ;
 <expr2>
 
   (**
@@ -128,6 +131,7 @@
 
 (* Next precedence level... *)
     | <expr3>
+    ;
 <expr3>
 
   (**
@@ -152,6 +156,7 @@
 
 (* Next precedence level... *)
     | <expr4>
+    ;
 <expr4>
 
   (**
@@ -168,6 +173,7 @@
 
 (* Next precedence level... *)
     | <expr5>
+    ;
 <expr5>
 
   (**
@@ -192,6 +198,7 @@
 
 (* Next precedence level... *)
     | <expr6>
+    ;
 <expr6>
 
   (**
@@ -246,10 +253,11 @@
    * itself is evaluated, so if_else(), or() and and() differ from the
    * expressions in terms of short-circuiting behavior.
    *)
-    | <id> <o> "(" <o> <expr> (<o> "," <o> <expr>)* <o> ")"
+    | <id> <o> "(" <o> (<expr> (<o> "," <o> <expr>)* <o>)? ")"
 
 (* Next precedence level... *)
     | <parexpr>
+    ;
 <parexpr>
 
   (**
@@ -277,6 +285,7 @@
    * fully-specified types) may be used like a literal.
    *)
     | <patt>
+    ;
 
 (**
  * A pattern. Used to match types and unpack type parameters.
@@ -308,6 +317,7 @@
    * context.
    *)
     | "?"
+    ;
 
 (**
  * A set of possible values, used by the "in" expression to define
@@ -327,6 +337,7 @@
    * is unpacked into variables.
    *)
     | "[" <o> <setel> (<o> "," <o> <setel>)* <o> "]"
+    ;
 
 (**
  * A set "element", either a single value, a single pattern, or a range of
@@ -344,6 +355,7 @@
    * range does not match anything.
    *)
     | <expr> <o> ".." <o> <expr>
+    ;
 
 
 (**** Type literals and patterns ****)
@@ -351,7 +363,7 @@
 (**
  * A type pattern or literal.
  *)
-<type> ::= <typeid> <o> <nullab> <o> <tvar> <o> <tparams>
+<type> ::= <typeid> <o> <nullab> <o> <tvar> <o> <tparams> ;
 
 (**
  * The base of a type, either a builtin type or a user-defined type. Note that
@@ -410,6 +422,7 @@
    * unspecified.
    *)
     | "u!" <id> "." <id>
+    ;
 
 (**
  * The nullability of a type.
@@ -417,12 +430,18 @@
 <nullab>
 
   (**
-   * Nullability is specified: if the ? is specified then the type is nullable,
-   * otherwise it is required. When this type is used as a pattern for a
-   * function argument type, and the function's nullability handling method is
-   * set to anything other than `DISCRETE`, this is ignored.
+   * The type is required/not nullable. When this type is used as a pattern
+   * for a function argument type, and the function's nullability handling
+   * method is set to anything other than `DISCRETE`, this is ignored.
    *)
-  ::= "?"?
+  ::= ""
+
+  (**
+   * The type is nullable. When this type is used as a pattern for a function
+   * argument type, and the function's nullability handling method is set to
+   * anything other than `DISCRETE`, this is ignored.
+   *)
+    | "?"
 
   (**
    * Nullability is captured into a variable or ignored in case of a pattern,
@@ -430,6 +449,7 @@
    * nullability will look like for example "i32??".
    *)
     | "?" <o> <parexpr>
+    ;
 
 (**
  * The variation of a type.
@@ -437,22 +457,49 @@
 <tvar>
 
   (**
-   * Use the specified variation (either defined in this extension or in the
-   * prefixed namespace, same logic as for base types) or the base variation
-   * if no variation is specified.
+   * Use the base variation.
    *)
-  ::= ("[" <o> (<id> ".")? <id> <o> "]")?
+  ::= ""
+
+  (**
+   * Use the specified variation from this extension.
+   *)
+    | "[" <o> <id> <o> "]"
+
+  (**
+   * Use the specified variation from another extension, referred to by the
+   * prefixed namespace (same logic as for base types).
+   *)
+    | "[" <o> <id> "." <id> <o> "]"
 
   (**
    * Match any variation. May only be used within a pattern.
    *)
     | "[" <o> "?" <o> "]"
+    ;
 
 (**
- * The parameter pack of a compound type. Note that "struct<>" means an empty
- * struct, while just "struct" would match a struct with any number of fields.
+ * The parameter pack of a compound type.
  *)
-<tparams> ::= ("<" <o> (<tparam> (<o> "," <o> <tparam>)* <o>)? ">")?
+<tparams>
+
+  (**
+   * No parameter pack is specified. This syntax is required for base types
+   * that do not support parameters. For types that do support them, it may be
+   * used in a pattern to match any set and number of parameters.
+   *)
+  ::= ""
+
+  (**
+   * Parameter pack is specified. This syntax is not allowed for base types
+   * that do not support parameters. For types that do support them, an empty
+   * list strictly means a type with zero parameters, i.e. `STRUCT<>` means
+   * an empty struct, not a struct with its parameters not bound. Note also
+   * that `STRUCT<?>` means a struct with exactly one field, but matching
+   * any type for that field.
+   *)
+    | "<" <o> (<tparam> (<o> "," <o> <tparam>)* <o>)? ">"
+    ;
 
 (**
  * A single type parameter.
@@ -472,6 +519,7 @@
    * Syntax for an anonymous/unnamed parameter.
    *)
     | <expr>
+    ;
 
 
 (**** Simple literals and identifiers ****)
@@ -479,30 +527,28 @@
 (**
  * Positive integer. Only base 10 is supported at this time.
  *)
-<int> ::= [1-9] [0-9]*
+<int> ::= [1-9] [0-9]* ;
 
 (**
  * Boolean literals.
  *)
-<bool> ::= "true" | "false"
+<bool> ::= "true" | "false" ;
 
 (**
  * An arbitrary identifier for as far as parsing is concerned. Used for all
  * kinds of things.
  *)
-<id> ::= <id1> <id2>*
+<id> ::= <id1> <id2>* ;
 
 (**
- * Permissible initial characters of an identifier. Note that this grammar
- * assumes that the input has been lowercased first for case insensitivity, so
- * [A-Z] is implied.
+ * Permissible initial characters of an identifier.
  *)
-<id1> ::= [a-z] | "_" | "$"
+<id1> ::= [a-zA-Z_$] ;
 
 (**
  * Subsequent characters of an identifier.
  *)
-<id2> ::= <id1> | [0-9]
+<id2> ::= [a-zA-Z0-9_$] ;
 
 
 (**** Whitespace and comment management ****)
@@ -510,38 +556,57 @@
 (**
  * A grammatically required newline.
  *)
-<n> ::= <o> (<nl> <o>)+
+<n> ::= <o> (<nl> <o>)+ ;
 
 (**
  * An optional newline.
  *)
-<on> ::= <o> (<nl> <o>)*
+<on> ::= <o> (<nl> <o>)* ;
 
 (**
  * Grammatically required spacing.
  *)
-<w> ::= <s>+
+<w> ::= <s>+ ;
 
 (**
  * Optional spacing.
  *)
-<o> ::= <s>*
+<o> ::= <s>* ;
 
 (**
  * A single newline, possibly including an end-of-line comment. Both # and //
  * are allowed as start characters.
  *)
-<nl> ::= (("//" | "#") <notnl>* )? "\n"
+<nl> ::= <eolc> "\n" ;
 
 (**
- * A single space character or C-style block comment.
+ * A single spacing character or C-style block comment.
  *)
-<s> ::= " " | "\t" | "/*" <any>* "*/"
+<s>
+  ::= " "
+    | "\t"
+    | <blkc>
+    ;
+
+(**
+ * An optional end-of-line comment. Both # and // are allowed as start
+ * characters.
+ *)
+<eolc>
+  ::= ""
+    | "//" <notnl>*
+    | "#" <notnl>*
+    ;
+
+(**
+ * A C-style block comment.
+ *)
+<blkc> ::= "/*" <any>* "*/" ;
 
 (**
  * Any single character supported on the input.
  *)
-<any> ::= <notnl> | "\n"
+<any> ::= <notnl> | "\n" ;
 
 (**
  * Any single character supported on the input, except for a newline. This
@@ -550,8 +615,9 @@
  * accept at least this set.
  *)
 <notnl>
-  ::= [a-z] | [0-9]
+  ::= [a-z] | [A-Z] | [0-9]
     | " " | "`" | "~" | "!" | "@" | "#" | "$" | "%" | "\t"
     | "^" | "&" | "*" | "(" | ")" | "-" | "_" | "=" | "\""
     | "+" | "[" | "{" | "]" | "}" | "|" | ";" | ":" | "\\"
     | "'" | "," | "<" | "." | ">" | "/" | "?"
+    ;
