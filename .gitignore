@@ -1,6 +1,0 @@
-**/target
-**/.gradle
-**/.idea
-**/build
-gen
-/target/
