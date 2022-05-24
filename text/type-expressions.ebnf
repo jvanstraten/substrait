@@ -1,4 +1,4 @@
-(**
+(*
  * This grammar specifies the language used to describe function overload
  * parameter patterns and the type expressions used to derive the return
  * type in simple extension YAML files.
@@ -9,13 +9,30 @@
  *    parsed, as the grammar is case-insensitive and this keeps it at least
  *    somewhat clean.
  *  - Some rules in this grammar are ambiguous. Ambiguity must be resolved
- *    by applying the first rule that matches, and by matching ?*+ lazily
- *    where applicable (only relevant for block comments as defined here).
- *    This can be accomplished using a recursive-descent parser.
+ *    by applying the first alternative that matches, while matching ?*+
+ *    greedily. This can easily be accomplished using a recursive-descent
+ *    parser.
  *  - This grammar is overly strict w.r.t. required whitespace, supported
  *    characters in comments, etc. Implementations may accept a superset of
  *    this grammar, as long as all inputs that are matched by this grammar
  *    are evaluated according to this specification.
+ *  - The syntax (*:...* ) is used to specify some functional annotations for
+ *    ebnf.py:
+ *     - between a rule and its patterns:
+ *        - (*:collapse:rule* ): the alternatives for a collapsed rule are
+ *          added to the AST node for the specified rule, and said node is
+ *          used for both types. The rule that is collapsed into must have
+ *          a toplevel alter with just that rule. Used to hide precedence
+ *          logic in the AST node types.
+ *        - (*:text* ): instead of generating an AST node for this rule, just
+ *          store matched text as a string. For systems with a separate lexer
+ *          and parser, this is a lexer rule.
+ *        - (*:skip* ): same as text, but not included in the AST.
+ *        - (*:frag* ): for systems with a separate lexer and parser, this is
+ *          a fragment of a token.
+ *     - before a toplevel alternative: specifies the name of that alternative.
+ *       May be omitted for skipped and text rules, or when the alternative
+ *       matches a single literal string (in which case that string is used).
  *)
 
 
@@ -30,7 +47,7 @@
  * any nullability handling methods other than `DISCRETE` the nullability check
  * will be omitted, but the nullability of arguments can still be captured.
  *)
-<param> ::= <on> <patt> <on> ;
+<function_parameter> ::= <newline>? <pattern> <newline>? ;
 
 (**
  * Toplevel rule for function return types. The statements are first evaluated
@@ -40,12 +57,12 @@
  * return type. Note that the computed nullability of the return type will be
  * overridden if `MIRROR` is specified for nullability handling.
  *)
-<return> ::= <on> <stmt>* <expr> <on> ;
+<return_type_program> ::= <newline>? <statement>* <expression> <newline>? ;
 
 (**
  * Statement.
  *)
-<stmt>
+<statement>
 
   (**
    * Evaluates the RHS expression, then unpacks the result into the LHS
@@ -60,7 +77,7 @@
    * Variables used in the LHS pattern are assigned by unpacking the result of
    * the RHS expression.
    *)
-  ::= <patt> <o> "=" <o> <expr> <n>
+  ::= (*:assign*) <pattern> <white>? "=" <white>? <expression> <newline>
 
   (**
    * Asserts that the given expression yields true. An error must be thrown
@@ -68,7 +85,7 @@
    * the expression yields anything else. This is useful in particular in
    * conjunction with the "in" expression, to specify constraints.
    *)
-    | "assert" <w> <expr> <n>
+    | (*:assert*) "assert" <white> <expression> <newline>
     ;
 
 
@@ -78,14 +95,15 @@
  * An expression, that can be evaluated once all inputs it depends on are
  * defined.
  *)
-<expr>
+<expression>
 
   (**
    * Ternary conditional. The condition expression must yield a boolean. If
    * true, the "then" expression is evaluated and returned. If false, the
    * "else" expression is evaluated and returned.
    *)
-  ::= "if" <w> <expr> <w> "then" <w> <expr> <w> "else" <w> <expr>
+  ::= (*:if_else*) <expression> <white>? "?" <white>? <expression> <white>? ":" <white>? <expression>
+    | (*:if_else*) "if" <white> <expression> <white> "then" <white> <expression> <white> "else" <white> <expression>
 
   (**
    * Evaluates the LHS expression, and then matches it against the entries
@@ -95,133 +113,135 @@
    * returned, otherwise false is returned. Typically used in conjunction with
    * "assert" statements.
    *)
-    | <expr> <w> "in" <w> <set>
+    | (*:in*) <expression> <white> "in" <white> <metavalue_set>
 
   (**
    * A boolean OR expression. Both the LHS and RHS must be booleans. The RHS
    * is only evaluated if the LHS yielded false.
    *)
-    | <expr1> <o> "||" <o> <expr>
+    | (*:or*) <expression1> <white>? "||" <white>? <expression>
+    | (*:or*) <expression1> <white> "or" <white> <expression>
 
 (* Next precedence level... *)
-    | <expr1>
+    | <expression1>
     ;
-<expr1>
+<expression1> (*:collapse:expr*)
 
   (**
    * A boolean AND expression. Both the LHS and RHS must be booleans. The RHS
    * is only evaluated if the LHS yielded true.
    *)
-  ::= <expr2> <o> "&&" <o> <expr1>
+  ::= (*:and*) <expression2> <white>? "&&" <white>? <expression1>
+    | (*:and*) <expression2> <white> "and" <white> <expression1>
 
 (* Next precedence level... *)
-    | <expr2>
+    | <expression2>
     ;
-<expr2>
+<expression2> (*:collapse:expr1*)
 
   (**
    * Equality test. A metatype mismatch between the LHS and RHS is an error.
    *)
-  ::= <expr3> <o> "==" <o> <expr2>
+  ::= (*:eq*) <expression3> <white>? "==" <white>? <expression2>
 
   (**
    * Inequality test. A metatype mismatch between the LHS and RHS is an error.
    *)
-    | <expr3> <o> "!=" <o> <expr2>
+    | (*:ne*) <expression3> <white>? "!=" <white>? <expression2>
 
 (* Next precedence level... *)
-    | <expr3>
+    | <expression3>
     ;
-<expr3>
+<expression3> (*:collapse:expr2*)
 
   (**
    * Less-than test. The LHS and RHS must both be integers.
    *)
-  ::= <expr4> <o> "<" <o> <expr3>
+  ::= (*:lt*) <expression4> <white>? "<" <white>? <expression3>
 
   (**
    * Less-than-or-equal test. The LHS and RHS must both be integers.
    *)
-    | <expr4> <o> "<=" <o> <expr3>
+    | (*:le*) <expression4> <white>? "<=" <white>? <expression3>
 
   (**
    * Greater-than test. The LHS and RHS must both be integers.
    *)
-    | <expr4> <o> ">" <o> <expr3>
+    | (*:gt*) <expression4> <white>? ">" <white>? <expression3>
 
   (**
    * Greater-than-or-equal test. The LHS and RHS must both be integers.
    *)
-    | <expr4> <o> ">=" <o> <expr3>
+    | (*:ge*) <expression4> <white>? ">=" <white>? <expression3>
 
 (* Next precedence level... *)
-    | <expr4>
+    | <expression4>
     ;
-<expr4>
+<expression4> (*:collapse:expr3*)
 
   (**
    * Integer addition. The LHS and RHS must both be integers. i64 overflow
    * should throw an error.
    *)
-  ::= <expr5> <o> "+" <o> <expr4>
+  ::= (*:add*) <expression5> <white>? "+" <white>? <expression4>
 
   (**
    * Integer subtraction. The LHS and RHS must both be integers. i64 overflow
    * should throw an error.
    *)
-    | <expr5> <o> "-" <o> <expr4>
+    | (*:sub*) <expression5> <white>? "-" <white>? <expression4>
 
 (* Next precedence level... *)
-    | <expr5>
+    | <expression5>
     ;
-<expr5>
+<expression5> (*:collapse:expr4*)
 
   (**
    * Integer multiplication. The LHS and RHS must both be integers. i64 overflow
    * should throw an error.
    *)
-  ::= <expr6> <o> "*" <o> <expr5>
+  ::= (*:mul*) <expression6> <white>? "*" <white>? <expression5>
 
   (**
    * Integer division, rounding down to negative infinity (same convention as
    * Python, NOT the same as C and friends). The LHS and RHS must both be
    * integers. Division by zero should throw an error.
    *)
-    | <expr6> <o> "/" <o> <expr5>
+    | (*:div*) <expression6> <white>? "/" <white>? <expression5>
 
   (**
    * Integer remainder for the above definition of division (that is, the sign
    * matches the divisor, not the divident). The LHS and RHS must both be
    * integers. Division by zero should throw an error.
    *)
-    | <expr6> <o> "%" <o> <expr5>
+    | (*:rem*) <expression6> <white>? "%" <white>? <expression5>
 
 (* Next precedence level... *)
-    | <expr6>
+    | <expression6>
     ;
-<expr6>
+<expression6> (*:collapse:expr5*)
 
   (**
    * Integer unity operator, to allow integer literals with explicit positive
    * sign to be specified. The operand must be an integer.
    *)
-  ::= "+" <o> <expr6>
+  ::= (*:pos*) "+" <white>? <expression6>
 
   (**
    * Integer negation operator. The operand must be an integer. i64 overflow
    * (for an input of -2^63) should throw an error.
    *)
-    | "-" <o> <expr6>
+    | (*:neg*) "-" <white>? <expression6>
 
   (**
    * Boolean NOT operator. The operand must be a boolean.
    *)
-    | "!" <o> <expr6>
+    | (*:inv*) "!" <white>? <expression6>
 
   (**
    * Alternative syntax for "in" expression.
    *)
-    | "covers" <o> "(" <o> <expr> <o> "," <o> <set> <o> ")"
+    | (*:covers*) "covers" <white>? "(" <white>? <expression> <white>? "," <white>? <metavalue_set> <white>? ")"
 
   (**
    * Built-in function evaluation. The built-in functions are:
@@ -253,18 +273,18 @@
    * itself is evaluated, so if_else(), or() and and() differ from the
    * expressions in terms of short-circuiting behavior.
    *)
-    | <id> <o> "(" <o> (<expr> (<o> "," <o> <expr>)* <o>)? ")"
+    | (*:fn*) <identifier> <white>? "(" <white>? (<expression> (<white>? "," <white>? <expression>)* <white>?)? ")"
 
 (* Next precedence level... *)
-    | <parexpr>
+    | <parenthesized_expression>
     ;
-<parexpr>
+<parenthesized_expression> (*:collapse:expr6*)
 
   (**
    * Parentheses for explicit precedence and escaping otherwise ambiguous
    * syntax.
    *)
-  ::= "(" <o> <expr> <o> ")"
+  ::= (*:expr*) "(" <white>? <expression> <white>? ")"
 
   (**
    * Integer literal. Must be within 0..2^63-1. Negative integers are made
@@ -273,24 +293,24 @@
    * functions. If needed, however, it can however be made using for example
    * -9223372036854775807 - 1.
    *)
-    | <int>
+    | (*:int*) <integer_literal>
 
   (**
    * Boolean literal.
    *)
-    | <bool>
+    | (*:bool*) <boolean_literal>
 
   (**
    * Fully-specified patterns (i.e. previously defined variables and
    * fully-specified types) may be used like a literal.
    *)
-    | <patt>
+    | (*:patt*) <pattern>
     ;
 
 (**
  * A pattern. Used to match types and unpack type parameters.
  *)
-<patt>
+<pattern>
 
   (**
    * When used as a pattern, this matches a data type. All expression rules
@@ -299,7 +319,7 @@
    * fully-defined type, i.e. any variables used must have previously been
    * defined, and "?" operators are not allowed.
    *)
-  ::= <type>
+  ::= (*:type*) <data_type>
 
   (**
    * Variable usage (when used within an expression) or definition (when
@@ -309,52 +329,52 @@
    * as a template within the pattern), or must have been assigned to the
    * exact same value (it is treated as part of the pattern).
    *)
-    | <id>
+    | (*:var*) <identifier>
 
   (**
    * Operator that behaves like a variable that is never actually assigned,
    * or, equivalently, it matches everything. May only be used in pattern
    * context.
    *)
-    | "?"
+    | (*:any*) "?"
     ;
 
 (**
  * A set of possible values, used by the "in" expression to define
  * constraints.
  *)
-<set>
+<metavalue_set>
 
   (**
    * Shorthand notation for a set consisting of a single element or integral
    * range.
    *)
-  ::= <setel>
+  ::= (*:single*) <metavalue_set_element>
 
   (**
    * A set consisting of one or more values. The elements are matched from
    * left to right, and only the first matching element (if multiple match)
    * is unpacked into variables.
    *)
-    | "[" <o> <setel> (<o> "," <o> <setel>)* <o> "]"
+    | (*:multi*) "[" <white>? <metavalue_set_element> (<white>? "," <white>? <metavalue_set_element>)* <white>? "]"
     ;
 
 (**
  * A set "element", either a single value, a single pattern, or a range of
  * integers.
  *)
-<setel>
+<metavalue_set_element>
 
   (**
    * A single value or pattern.
    *)
-  ::= <expr>
+  ::= (*:single*) <expression>
 
   (**
    * An inclusive range of integers. If the LHS is greater than the RHS, the
    * range does not match anything.
    *)
-    | <expr> <o> ".." <o> <expr>
+    | (*:range*) <expression> <white>? ".." <white>? <expression>
     ;
 
 
@@ -363,17 +383,17 @@
 (**
  * A type pattern or literal.
  *)
-<type> ::= <typeid> <o> <nullab> <o> <tvar> <o> <tparams> ;
+<data_type> ::= <type_class> <white>? <nullability> <white>? <type_variation> <white>? <parameter_pack>? ;
 
 (**
- * The base of a type, either a builtin type or a user-defined type. Note that
+ * The type class, either a builtin type or a user-defined type. Note that
  * the builtin types must be specified here verbatim, because otherwise this
  * rule would conflict with variable usage.
  *)
-<typeid>
+<type_class>
 
   (**
-   * Builtin simple types. <tparams> must be left unspecified.
+   * Builtin simple types. <parameter_pack> must be left unspecified.
    *)
   ::= "boolean"
     | "i8"
@@ -393,7 +413,7 @@
     | "uuid"
 
   (**
-   * Builtin complex types. When <tparams> is left unspecified, types with any
+   * Builtin complex types. When <parameter_pack> is left unspecified, types with any
    * number of parameters are matched.
    *)
     | "fixedchar"
@@ -408,103 +428,79 @@
 
   (**
    * A user-defined type defined in the current simple extension. Since (at the
-   * time of writing) user-defined types cannot declare parameters, <tparams>
+   * time of writing) user-defined types cannot declare parameters, <parameter_pack>
    * must be left unspecified.
    *)
-    | "u!" <id>
+    | (*:user*) "u!" <identifier>
 
   (**
    * A user-defined type defined in another simple extension. The first
    * identifier must match a namespace defined elsewhere in the YAML file,
    * mapping it to the canonical URI of the extension (URI syntax would
    * otherwise conflict with this grammar). Since (at the time of writing)
-   * user-defined types cannot declare parameters, <tparams> must be left
+   * user-defined types cannot declare parameters, <parameter_pack> must be left
    * unspecified.
    *)
-    | "u!" <id> "." <id>
+    | (*:user_ext*) "u!" <identifier> "." <identifier>
     ;
 
 (**
  * The nullability of a type.
  *)
-<nullab>
+<nullability>
 
   (**
-   * The type is required/not nullable. When this type is used as a pattern
-   * for a function argument type, and the function's nullability handling
-   * method is set to anything other than `DISCRETE`, this is ignored.
+   * The type is nullable when the ? is present, otherwise it is required.
+   * When this type is used as a pattern for a function argument type, and
+   * the function's nullability handling method is set to anything other
+   * than `DISCRETE`, this is ignored.
    *)
-  ::= ""
-
-  (**
-   * The type is nullable. When this type is used as a pattern for a function
-   * argument type, and the function's nullability handling method is set to
-   * anything other than `DISCRETE`, this is ignored.
-   *)
-    | "?"
+  ::= (*:literal*) "?"?
 
   (**
    * Nullability is captured into a variable or ignored in case of a pattern,
    * or specified by means of a boolean expression. Note that ignored
    * nullability will look like for example "i32??".
    *)
-    | "?" <o> <parexpr>
+    | (*:expression*) "?" <white>? <parenthesized_expression>
     ;
 
 (**
  * The variation of a type.
  *)
-<tvar>
+<type_variation>
 
   (**
-   * Use the base variation.
+   * Use the system-default variation.
    *)
-  ::= ""
+  ::= (*:base*) ("[" <white>? "0" <white>? "]")?
 
   (**
    * Use the specified variation from this extension.
    *)
-    | "[" <o> <id> <o> "]"
+    | (*:user*) "[" <white>? <identifier> <white>? "]"
 
   (**
    * Use the specified variation from another extension, referred to by the
    * prefixed namespace (same logic as for base types).
    *)
-    | "[" <o> <id> "." <id> <o> "]"
+    | (*:user_ext*) "[" <white>? <identifier> "." <identifier> <white>? "]"
 
   (**
    * Match any variation. May only be used within a pattern.
    *)
-    | "[" <o> "?" <o> "]"
+    | (*:any*) "[" <white>? "?" <white>? "]"
     ;
 
 (**
  * The parameter pack of a compound type.
  *)
-<tparams>
-
-  (**
-   * No parameter pack is specified. This syntax is required for base types
-   * that do not support parameters. For types that do support them, it may be
-   * used in a pattern to match any set and number of parameters.
-   *)
-  ::= ""
-
-  (**
-   * Parameter pack is specified. This syntax is not allowed for base types
-   * that do not support parameters. For types that do support them, an empty
-   * list strictly means a type with zero parameters, i.e. `STRUCT<>` means
-   * an empty struct, not a struct with its parameters not bound. Note also
-   * that `STRUCT<?>` means a struct with exactly one field, but matching
-   * any type for that field.
-   *)
-    | "<" <o> (<tparam> (<o> "," <o> <tparam>)* <o>)? ">"
-    ;
+<parameter_pack> ::= "<" <white>? (<parameter> (<white>? "," <white>? <parameter>)* <white>?)? ">" ;
 
 (**
  * A single type parameter.
  *)
-<tparam>
+<parameter>
 
   (**
    * Syntax for a named parameter. The name is semantically ignored; the syntax
@@ -513,12 +509,12 @@
    * context of an NSTRUCT and anonymous parameters within the context of an
    * NSTRUCT, rendering this merely a grammatical construct.
    *)
-  ::= <id> <o> ":" <o> <expr>
+  ::= (*:named*) <identifier> <white>? ":" <white>? <expression>
 
   (**
    * Syntax for an anonymous/unnamed parameter.
    *)
-    | <expr>
+    | (*:anon*) <expression>
     ;
 
 
@@ -527,28 +523,28 @@
 (**
  * Positive integer. Only base 10 is supported at this time.
  *)
-<int> ::= [1-9] [0-9]* ;
+<integer_literal> (*:text*) ::= [1-9] [0-9]* ;
 
 (**
  * Boolean literals.
  *)
-<bool> ::= "true" | "false" ;
+<boolean_literal> ::= "true" | "false" ;
 
 (**
  * An arbitrary identifier for as far as parsing is concerned. Used for all
  * kinds of things.
  *)
-<id> ::= <id1> <id2>* ;
+<identifier> (*:text*) ::= <identifier_start> <identifier_continuation>* ;
 
 (**
  * Permissible initial characters of an identifier.
  *)
-<id1> ::= [a-zA-Z_$] ;
+<identifier_start> (*:frag*) ::= [a-z] | [A-Z] | "_" | "$" ;
 
 (**
  * Subsequent characters of an identifier.
  *)
-<id2> ::= [a-zA-Z0-9_$] ;
+<identifier_continuation> (*:frag*) ::= [a-z] | [A-Z] | [0-9] | "_" | "$" ;
 
 
 (**** Whitespace and comment management ****)
@@ -556,68 +552,66 @@
 (**
  * A grammatically required newline.
  *)
-<n> ::= <o> (<nl> <o>)+ ;
-
-(**
- * An optional newline.
- *)
-<on> ::= <o> (<nl> <o>)* ;
+<newline> (*:skip*) ::= <white>? (<single_newline> <white>?)+ ;
 
 (**
  * Grammatically required spacing.
  *)
-<w> ::= <s>+ ;
-
-(**
- * Optional spacing.
- *)
-<o> ::= <s>* ;
+<white> (*:skip*) ::= <single_space>+ ;
 
 (**
  * A single newline, possibly including an end-of-line comment. Both # and //
  * are allowed as start characters.
  *)
-<nl> ::= <eolc> "\n" ;
+<single_newline> (*:frag*) ::= <line_comment>? ( "\n" | "\r" | "\r" "\n" ) ;
 
 (**
  * A single spacing character or C-style block comment.
  *)
-<s>
-  ::= " "
-    | "\t"
-    | <blkc>
-    ;
+<single_space> (*:frag*) ::= " " | "\t" | <block_comment> ;
 
 (**
  * An optional end-of-line comment. Both # and // are allowed as start
  * characters.
  *)
-<eolc>
-  ::= ""
-    | "//" <notnl>*
-    | "#" <notnl>*
-    ;
+<line_comment> (*:frag*) ::= "//" <not_newline>* | "#" <not_newline>* ;
 
 (**
  * A C-style block comment.
  *)
-<blkc> ::= "/*" <any>* "*/" ;
+<block_comment> (*:frag*) ::= "/*" <block_comment_character>* "*"? "*/" ;
 
 (**
- * Any single character supported on the input.
+ * A single token in a block comment, either a single character or an asterisk
+ * followed by something that isn't a slash.
  *)
-<any> ::= <notnl> | "\n" ;
+<block_comment_character> (*:frag*) ::= <not_asterisk> | "*" <not_slash> ;
 
 (**
- * Any single character supported on the input, except for a newline. This
- * includes all characters that can be written using a US keyboard.
- * Implementations may choose to accept more (or all) characters, but must
- * accept at least this set.
+ * Any single character supported on the input, except for newlines.
  *)
-<notnl>
+<not_newline> (*:frag*) ::= <not_newline_asterisk_or_slash> | "*" | "/" ;
+
+(**
+ * Any single character supported on the input, except for asterisks.
+ *)
+<not_asterisk> (*:frag*) ::= <not_newline_asterisk_or_slash> | "\n" | "\r" | "/" ;
+
+(**
+ * Any single character supported on the input, except for slashes.
+ *)
+<not_slash> (*:frag*) ::= <not_newline_asterisk_or_slash> | "\n" | "\r" | "*" ;
+
+(**
+ * Any single character supported on the input, except for newlines, asterisks,
+ * and slashes. This includes all characters (except aforementioned) that can
+ * be written using a US keyboard. Implementations may choose to accept more
+ * (or all) characters, but must accept at least this set.
+ *)
+<not_newline_asterisk_or_slash> (*:frag*)
   ::= [a-z] | [A-Z] | [0-9]
     | " " | "`" | "~" | "!" | "@" | "#" | "$" | "%" | "\t"
-    | "^" | "&" | "*" | "(" | ")" | "-" | "_" | "=" | "\""
-    | "+" | "[" | "{" | "]" | "}" | "|" | ";" | ":" | "\\"
-    | "'" | "," | "<" | "." | ">" | "/" | "?"
+    | "^" | "&" | "(" | ")" | "-" | "_" | "=" | "+" | "\""
+    | "[" | "{" | "]" | "}" | "|" | ";" | ":" | "'" | "\\"
+    | "," | "<" | "." | ">" | "?"
     ;
